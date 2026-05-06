@@ -1,6 +1,6 @@
 # pi-claude-bridge
-
-![Claude bridge provider](https://raw.githubusercontent.com/vanillagreencom/vstack/main/pi-extensions/pi-claude-bridge/assets/claude-bridge1.png)
+![Claude bridge demo response](assets/bridge-demo.png)
+![Claude Bridge settings panel](assets/settings-panel.png)
 
 Claude Code provider bridge for Pi. It registers `claude-bridge/*` models and routes Pi turns through the Claude Agent SDK while keeping Pi's tools in the Pi TUI.
 
