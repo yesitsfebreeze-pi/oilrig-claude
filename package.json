@@ -1,0 +1,147 @@
+{
+  "name": "@vanillagreen/pi-claude-bridge",
+  "version": "1.0.0",
+  "description": "Pi provider bridge that runs Claude Code through the Claude Agent SDK, with opt-in forwarding for Pi prompt context.",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "coding-agent",
+    "claude-code",
+    "claude-agent-sdk"
+  ],
+  "license": "MIT",
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ],
+    "image": "https://raw.githubusercontent.com/vanillagreencom/vstack/main/pi-extensions/pi-claude-bridge/assets/claude-bridge1.png"
+  },
+  "vstack": {
+    "extensionManager": {
+      "displayName": "Claude Bridge",
+      "settings": [
+        {
+          "key": "enabled",
+          "label": "Enable Claude bridge provider",
+          "description": "Register claude-bridge models that route Pi turns through Claude Code via the Claude Agent SDK.",
+          "type": "boolean",
+          "default": true,
+          "category": "General",
+          "apply": "reload",
+          "requiresReload": true
+        },
+        {
+          "key": "appendSystemPrompt",
+          "label": "Forward AGENTS.md + skills",
+          "description": "Original bridge behavior: append AGENTS.md and Pi's skills block to Claude Code's claude_code preset prompt.",
+          "type": "boolean",
+          "default": true,
+          "category": "Base Prompt",
+          "apply": "live"
+        },
+        {
+          "key": "includeAppendSystemPromptMd",
+          "label": "Forward APPEND_SYSTEM.md",
+          "description": "Opt in to forwarding project/global APPEND_SYSTEM.md content to Claude Code. Off by default because these files can be Pi-specific.",
+          "type": "boolean",
+          "default": false,
+          "category": "Pi Prompt Context",
+          "apply": "live"
+        },
+        {
+          "key": "includeProjectAgentsHook",
+          "label": "Forward project agents hook",
+          "description": "Forward recognized pi-agents-tmux before_agent_start prompt additions such as the Project Agents/Subagents list. Off by default.",
+          "type": "boolean",
+          "default": false,
+          "category": "Pi Prompt Hooks",
+          "apply": "live"
+        },
+        {
+          "key": "includeTaskPanelHook",
+          "label": "Forward task panel hook",
+          "description": "Forward recognized pi-task-panel workflow reminders from before_agent_start. Off by default.",
+          "type": "boolean",
+          "default": false,
+          "category": "Pi Prompt Hooks",
+          "apply": "live"
+        },
+        {
+          "key": "includeCavemanHook",
+          "label": "Forward caveman hook",
+          "description": "Forward recognized pi-caveman response-style prompt additions from before_agent_start. Off by default.",
+          "type": "boolean",
+          "default": false,
+          "category": "Pi Prompt Hooks",
+          "apply": "live"
+        },
+        {
+          "key": "strictMcpConfig",
+          "label": "Strict MCP config",
+          "description": "When Claude Code filesystem settings are loaded, tell Claude Code to use only MCP servers passed by the bridge, avoiding token-heavy MCP auto-loads.",
+          "type": "boolean",
+          "default": true,
+          "category": "Claude Code",
+          "apply": "live"
+        },
+        {
+          "key": "pathToClaudeCodeExecutable",
+          "label": "Claude executable path",
+          "description": "Optional explicit path to the claude binary, useful on NixOS or non-FHS systems.",
+          "type": "path",
+          "default": "",
+          "category": "Claude Code",
+          "apply": "live"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.2.128",
+    "@anthropic-ai/sdk": "^0.73.0",
+    "cc-session-io": "^0.3.1",
+    "change-case": "^5.4.4"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-ai": "*",
+    "@mariozechner/pi-coding-agent": "*"
+  },
+  "devDependencies": {
+    "@mariozechner/pi-ai": "^0.72.1",
+    "@mariozechner/pi-coding-agent": "^0.72.1",
+    "@types/node": "^24.3.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  },
+  "scripts": {
+    "test:unit": "node --import tsx --test tests/unit-*.mjs",
+    "test": "set -a && [ -f .env.test ] && . .env.test; set +a && npm run test:unit && tests/int-smoke.sh && tests/int-multi-turn.sh && tests/int-cache.sh && node --import tsx --test tests/int-*.mjs",
+    "test:usage": "tests/usage-test.sh",
+    "typecheck": "tsc --noEmit"
+  },
+  "files": [
+    "src/",
+    "assets/",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md",
+    "package.json"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vanillagreencom/vstack.git",
+    "directory": "pi-extensions/pi-claude-bridge"
+  },
+  "homepage": "https://github.com/vanillagreencom/vstack/tree/main/pi-extensions/pi-claude-bridge",
+  "bugs": {
+    "url": "https://github.com/vanillagreencom/vstack/issues"
+  },
+  "author": "vanillagreen",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
