@@ -6,6 +6,23 @@ Claude Code provider bridge for Pi. It registers `claude-bridge/*` models and ro
 
 This package is a vstack fork of [`elidickinson/pi-claude-bridge`](https://github.com/elidickinson/pi-claude-bridge). The provider, MCP tool bridge, session sync, streaming, and Claude Code SDK plumbing come from that project; this fork removes the AskClaude tool and adds vstack-controlled prompt-context forwarding.
 
+## Install
+
+Via [npm](https://www.npmjs.com/package/@vanillagreen/pi-claude-bridge):
+
+```bash
+pi install npm:@vanillagreen/pi-claude-bridge
+```
+
+Via [vstack](https://github.com/vanillagreencom/vstack):
+
+```bash
+cargo install --git https://github.com/vanillagreencom/vstack.git vstack
+vstack add vanillagreencom/vstack --pi-extension pi-claude-bridge --harness pi -y
+```
+
+Restart Pi after installation.
+
 ## What it provides
 
 - `claude-bridge/claude-opus-4-7`, Sonnet, and Haiku models in `/model`.
