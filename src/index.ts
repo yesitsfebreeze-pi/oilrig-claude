@@ -1,6 +1,6 @@
-import { calculateCost, getModels, type AssistantMessage, type AssistantMessageEventStream, type Context, type Model, type SimpleStreamOptions, type Tool } from "@mariozechner/pi-ai";
-import * as piAi from "@mariozechner/pi-ai";
-import { type ExtensionAPI, type ExtensionUIContext } from "@mariozechner/pi-coding-agent";
+import { calculateCost, getModels, type AssistantMessage, type AssistantMessageEventStream, type Context, type Model, type SimpleStreamOptions, type Tool } from "@earendil-works/pi-ai";
+import * as piAi from "@earendil-works/pi-ai";
+import { type ExtensionAPI, type ExtensionUIContext } from "@earendil-works/pi-coding-agent";
 import { createSdkMcpServer, query, type EffortLevel, type SDKMessage, type SDKUserMessage, type SettingSource } from "@anthropic-ai/claude-agent-sdk";
 import type { Base64ImageSource, ContentBlockParam, MessageParam } from "@anthropic-ai/sdk/resources";
 import { createSession, deleteSession, repairToolPairing } from "cc-session-io";
