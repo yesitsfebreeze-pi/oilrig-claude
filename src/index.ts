@@ -3,7 +3,8 @@ import * as piAi from "@earendil-works/pi-ai";
 import { type ExtensionAPI, type ExtensionUIContext } from "@earendil-works/pi-coding-agent";
 import { createSdkMcpServer, query, type EffortLevel, type SDKMessage, type SDKUserMessage, type SettingSource } from "@anthropic-ai/claude-agent-sdk";
 import type { Base64ImageSource, ContentBlockParam, MessageParam } from "@anthropic-ai/sdk/resources";
-import { createSession, deleteSession, repairToolPairing } from "cc-session-io";
+import { createSession, deleteSession, openSession, repairToolPairing } from "cc-session-io";
+import { createHash } from "crypto";
 import { accessSync, appendFileSync, constants as fsConstants, mkdirSync, realpathSync, statSync } from "fs";
 import { homedir } from "os";
 import { delimiter, dirname, join } from "path";
@@ -184,12 +185,107 @@ interface SessionState {
 }
 
 let sharedSession: SessionState | null = null;
+let extensionApi: ExtensionAPI | undefined;
+
+const BRIDGE_SESSION_CUSTOM_TYPE = "claude-bridge-session";
+
+interface PersistedBridgeSessionState extends SessionState {
+	fingerprint: string;
+	piSessionId?: string;
+	updatedAt: string;
+}
+
+function fingerprintMessages(messages: Context["messages"]): string {
+	const normalized = messages.map((message) => {
+		if (message.role === "assistant") {
+			return {
+				role: message.role,
+				provider: (message as AssistantMessage).provider,
+				model: (message as AssistantMessage).model,
+				content: (message as AssistantMessage).content,
+			};
+		}
+		return message;
+	});
+	return createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
+}
+
+function readBuiltSessionContext(sessionManager: unknown): { messages: Context["messages"] } | undefined {
+	const built = typeof (sessionManager as any)?.buildSessionContext === "function" ? (sessionManager as any).buildSessionContext() : undefined;
+	return Array.isArray(built?.messages) ? built as { messages: Context["messages"] } : undefined;
+}
+
+function latestPersistedBridgeSession(sessionManager: unknown): PersistedBridgeSessionState | undefined {
+	const entries = typeof (sessionManager as any)?.getEntries === "function" ? (sessionManager as any).getEntries() : [];
+	if (!Array.isArray(entries)) return undefined;
+	for (let i = entries.length - 1; i >= 0; i--) {
+		const entry = entries[i];
+		if (entry?.type !== "custom" || entry.customType !== BRIDGE_SESSION_CUSTOM_TYPE) continue;
+		const data = entry.data as Partial<PersistedBridgeSessionState> | undefined;
+		if (!data || typeof data.sessionId !== "string" || typeof data.cursor !== "number" || typeof data.cwd !== "string" || typeof data.fingerprint !== "string") continue;
+		return data as PersistedBridgeSessionState;
+	}
+	return undefined;
+}
+
+function claudeSessionExists(sessionId: string, cwd: string): boolean {
+	try {
+		const session = openSession({ sessionId, projectPath: cwd, claudeDir: process.env.CLAUDE_CONFIG_DIR });
+		statSync(session.jsonlPath);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+function restoreSharedSessionFromPi(ctx: { sessionManager?: unknown }): void {
+	const persisted = latestPersistedBridgeSession(ctx.sessionManager);
+	if (!persisted) return;
+	const built = readBuiltSessionContext(ctx.sessionManager);
+	if (!built) return;
+	const cursor = Math.max(0, Math.min(persisted.cursor, built.messages.length));
+	const fingerprint = fingerprintMessages(built.messages.slice(0, cursor));
+	if (fingerprint !== persisted.fingerprint) {
+		debug(`restoreSharedSession: fingerprint mismatch for ${persisted.sessionId.slice(0, 8)}`);
+		return;
+	}
+	if (!claudeSessionExists(persisted.sessionId, persisted.cwd)) {
+		debug(`restoreSharedSession: Claude session missing for ${persisted.sessionId.slice(0, 8)}`);
+		return;
+	}
+	sharedSession = { sessionId: persisted.sessionId, cursor, cwd: persisted.cwd };
+	debug(`restoreSharedSession: restored ${persisted.sessionId.slice(0, 8)}, cursor=${cursor}`);
+}
+
+function schedulePersistSharedSession(ctxLike?: { sessionManager?: unknown }): void {
+	if (!extensionApi || !sharedSession || !ctxLike?.sessionManager) return;
+	const snapshot = { ...sharedSession };
+	const timer = setTimeout(() => {
+		try {
+			const built = readBuiltSessionContext(ctxLike.sessionManager);
+			if (!built) return;
+			const cursor = Math.max(0, Math.min(snapshot.cursor, built.messages.length));
+			const data: PersistedBridgeSessionState = {
+				...snapshot,
+				cursor,
+				fingerprint: fingerprintMessages(built.messages.slice(0, cursor)),
+				piSessionId: typeof (ctxLike.sessionManager as any)?.getSessionId === "function" ? (ctxLike.sessionManager as any).getSessionId() : undefined,
+				updatedAt: new Date().toISOString(),
+			};
+			extensionApi?.appendEntry(BRIDGE_SESSION_CUSTOM_TYPE, data);
+			debug(`persistSharedSession: saved ${data.sessionId.slice(0, 8)}, cursor=${data.cursor}`);
+		} catch (error) {
+			debug("persistSharedSession failed:", error);
+		}
+	}, 0);
+	timer.unref?.();
+}
 
 // Convert pi messages to Anthropic API format for session import.
-// Lossy: non-Anthropic thinking blocks are dropped (no valid signature), and only
-// text/image/toolCall block types are handled. If all blocks in an assistant message
-// are filtered, the message is dropped — which can create invalid sequences (e.g.
-// two user messages in a row, or tool_result without preceding tool_use).
+// Lossy: non-Anthropic thinking blocks are dropped (no valid signature). User and
+// tool-result image blocks are preserved when possible. If assistant blocks are
+// otherwise incompatible, convertPiMessages emits a text placeholder so the record
+// sequence stays valid before repairToolPairing runs.
 function convertAndImportMessages(
 	session: ReturnType<typeof createSession>,
 	messages: Context["messages"],
@@ -1166,6 +1262,7 @@ function streamClaudeAgentSdk(model: Model<any>, context: Context, options?: Sim
 // --- Extension registration ---
 
 export default function (pi: ExtensionAPI) {
+	extensionApi = pi;
 	// Disable non-essential Claude Code traffic (update checks, MCP registry, telemetry)
 	process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1";
 
@@ -1195,8 +1292,13 @@ export default function (pi: ExtensionAPI) {
 		if (event.reason === "new" || event.reason === "resume" || event.reason === "fork") {
 			clearSession(`session_start:${event.reason}`);
 		}
+		if (event.reason === "startup" || event.reason === "resume" || event.reason === "fork") restoreSharedSessionFromPi(ctx);
 	});
 	pi.on("session_shutdown", () => clearSession("session_shutdown"));
+	pi.on("message_end", (event, ctx) => {
+		const message = (event as { message?: AssistantMessage }).message;
+		if (message?.role === "assistant" && message.provider === PROVIDER_ID) schedulePersistSharedSession(ctx);
+	});
 
 	// pi /compact and session-tree navigation (rewind / fork-at-point /
 	// branch switch) both mutate pi's messages array out from under the

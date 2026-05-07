@@ -109,7 +109,7 @@ describe("empty text block filtering", () => {
 describe("thinking block filtering", () => {
 	it("non-Anthropic provider thinking blocks dropped", () => {
 		const msgs = [
-			{ role: "assistant", provider: "openrouter", content: [
+			{ role: "assistant", content: [
 				{ type: "thinking", thinking: "let me think..." },
 				{ type: "text", text: "answer" },
 			]},
@@ -159,13 +159,21 @@ describe("thinking block filtering", () => {
 
 	it("assistant with only thinking (non-Anthropic) → placeholder", () => {
 		const msgs = [
-			{ role: "assistant", provider: "deepseek", content: [
+			{ role: "assistant", content: [
 				{ type: "thinking", thinking: "deep thoughts" },
 			]},
 		];
 		const result = convert(msgs);
 		assert.equal(result.length, 1);
 		assert.equal(result[0].content[0].text, "[incompatible content omitted]");
+	});
+
+	it("non-Claude assistant provider provenance is preserved", () => {
+		const result = convert([
+			{ role: "assistant", provider: "openai", model: "gpt-test", content: [{ type: "text", text: "hello" }] },
+		]);
+		assert.equal(result[0].content[0].text, "[Prior Pi assistant response from openai/gpt-test]\n");
+		assert.equal(result[0].content[1].text, "hello");
 	});
 });
 
@@ -267,5 +275,17 @@ describe("message structure", () => {
 			]},
 		];
 		assert.equal(convert(msgs)[0].content[0].content, "line 1\nline 2");
+	});
+
+	it("toolResult with image content preserves image blocks", () => {
+		const result = convert([{ role: "toolResult", toolCallId: "x", content: [
+			{ type: "text", text: "screenshot" },
+			{ type: "image", mimeType: "image/png", data: "abc123" },
+		] }]);
+		const content = result[0].content[0].content;
+		assert.equal(Array.isArray(content), true);
+		assert.equal(content[0].type, "text");
+		assert.equal(content[1].type, "image");
+		assert.equal(content[1].source.media_type, "image/png");
 	});
 });

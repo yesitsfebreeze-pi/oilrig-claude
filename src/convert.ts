@@ -2,7 +2,7 @@
 // Extracted so they can be tested without pulling in the full extension runtime.
 
 import type { Message as PiMessage } from "@earendil-works/pi-ai";
-import type { Message as SessionMessage } from "cc-session-io";
+import type { ContentBlock, Message as SessionMessage } from "cc-session-io";
 import { pascalCase } from "change-case";
 
 export const PROVIDER_ID = "claude-bridge";
@@ -44,6 +44,42 @@ export function messageContentToText(
 	return hasText ? parts.join("\n") : "";
 }
 
+function imageBlockToAnthropic(block: { data?: string; mimeType?: string }): ContentBlock | undefined {
+	if (!block.data || !block.mimeType) return undefined;
+	return { type: "image", source: { type: "base64", media_type: block.mimeType, data: block.data } } as ContentBlock;
+}
+
+function toolResultContentToAnthropic(
+	content: string | Array<{ type: string; text?: string; data?: string; mimeType?: string }>,
+): string | ContentBlock[] {
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	const blocks: ContentBlock[] = [];
+	for (const block of content) {
+		if (block.type === "text" && block.text) {
+			blocks.push({ type: "text", text: block.text });
+		} else if (block.type === "image") {
+			const image = imageBlockToAnthropic(block);
+			if (image) blocks.push(image);
+		} else if (block.type) {
+			blocks.push({ type: "text", text: `[${block.type}]` });
+		}
+	}
+	if (blocks.length === 0) return "";
+	if (blocks.every((block) => block.type === "text")) return blocks.map((block) => (block as { text: string }).text).join("\n");
+	return blocks;
+}
+
+function assistantProvenancePrefix(msg: PiMessage): string | undefined {
+	if (msg.role !== "assistant") return undefined;
+	const provider = typeof (msg as any).provider === "string" ? (msg as any).provider : undefined;
+	const model = typeof (msg as any).model === "string" ? (msg as any).model : undefined;
+	const api = typeof (msg as any).api === "string" ? (msg as any).api : undefined;
+	if (!provider && !model && !api) return undefined;
+	if (provider === PROVIDER_ID || api === "anthropic") return undefined;
+	return `[Prior Pi assistant response from ${provider ?? api ?? "unknown-provider"}${model ? `/${model}` : ""}]\n`;
+}
+
 /** Convert pi message array to Anthropic API format. */
 export function convertPiMessages(
 	messages: PiMessage[],
@@ -61,16 +97,18 @@ export function convertPiMessages(
 				for (const block of msg.content) {
 					if (block.type === "text" && block.text) parts.push({ type: "text", text: block.text });
 					else if (block.type === "image" && block.data && block.mimeType) {
-						parts.push({ type: "image", source: { type: "base64", media_type: block.mimeType, data: block.data } });
+						parts.push(imageBlockToAnthropic(block));
 					}
 				}
-				anthropicMessages.push({ role: "user", content: parts.length ? parts : "[image]" });
+				anthropicMessages.push({ role: "user", content: parts.filter(Boolean).length ? parts.filter(Boolean) as ContentBlock[] : "[image]" });
 			} else {
 				anthropicMessages.push({ role: "user", content: "[empty]" });
 			}
 		} else if (msg.role === "assistant") {
 			const content = Array.isArray(msg.content) ? msg.content : [];
 			const blocks = [];
+			const provenance = assistantProvenancePrefix(msg);
+			if (provenance) blocks.push({ type: "text", text: provenance });
 			for (const block of content) {
 				if (block.type === "text" && block.text) {
 					blocks.push({ type: "text", text: block.text });
@@ -88,10 +126,10 @@ export function convertPiMessages(
 			if (!blocks.length) blocks.push({ type: "text", text: "[incompatible content omitted]" });
 			anthropicMessages.push({ role: "assistant", content: blocks });
 		} else if (msg.role === "toolResult") {
-			const text = typeof msg.content === "string" ? msg.content : messageContentToText(msg.content);
+			const content = toolResultContentToAnthropic(msg.content);
 			anthropicMessages.push({
 				role: "user",
-				content: [{ type: "tool_result", tool_use_id: sanitizeToolId(msg.toolCallId, sanitizedIds), content: text || "", is_error: msg.isError }],
+				content: [{ type: "tool_result", tool_use_id: sanitizeToolId(msg.toolCallId, sanitizedIds), content: content || "", is_error: msg.isError }],
 			});
 		}
 	}
