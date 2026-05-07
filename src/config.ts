@@ -7,8 +7,7 @@ import { existsSync, readFileSync } from "fs";
 import { homedir } from "os";
 import { dirname, join, resolve } from "path";
 
-export const PACKAGE_ID = "pi-claude-bridge";
-export const SCOPED_PACKAGE_ID = "@vanillagreen/pi-claude-bridge";
+export const PACKAGE_ID = "@vanillagreen/pi-claude-bridge";
 
 export interface Config {
 	enabled?: boolean;
@@ -87,7 +86,7 @@ function readManagerConfig(cwd: string): SettingsRecord {
 		try {
 			const parsed = JSON.parse(readFileSync(path, "utf8"));
 			const configRoot = asRecord(asRecord(asRecord(parsed?.vstack)?.extensionManager)?.config);
-			const config = asRecord(configRoot?.[PACKAGE_ID]) ?? asRecord(configRoot?.[SCOPED_PACKAGE_ID]);
+			const config = asRecord(configRoot?.[PACKAGE_ID]);
 			if (config) mergeDeep(merged, config);
 		} catch {
 			// Ignore malformed optional manager config; Pi will surface settings issues elsewhere.

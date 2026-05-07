@@ -19487,8 +19487,7 @@ function popContext() {
 import { existsSync as existsSync3, readFileSync as readFileSync3 } from "fs";
 import { homedir as homedir2 } from "os";
 import { dirname as dirname2, join as join2, resolve } from "path";
-var PACKAGE_ID = "pi-claude-bridge";
-var SCOPED_PACKAGE_ID = "@vanillagreen/pi-claude-bridge";
+var PACKAGE_ID = "@vanillagreen/pi-claude-bridge";
 function expandHome(input) {
   if (input === "~") return homedir2();
   if (input.startsWith("~/")) return join2(homedir2(), input.slice(2));
@@ -19539,7 +19538,7 @@ function readManagerConfig(cwd) {
     try {
       const parsed = JSON.parse(readFileSync3(path, "utf8"));
       const configRoot = asRecord(asRecord(asRecord(parsed?.vstack)?.extensionManager)?.config);
-      const config2 = asRecord(configRoot?.[PACKAGE_ID]) ?? asRecord(configRoot?.[SCOPED_PACKAGE_ID]);
+      const config2 = asRecord(configRoot?.[PACKAGE_ID]);
       if (config2) mergeDeep(merged, config2);
     } catch {
     }
