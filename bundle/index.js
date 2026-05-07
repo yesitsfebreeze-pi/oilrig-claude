@@ -34267,7 +34267,7 @@ config(en_default());
 // src/typebox-to-zod.ts
 function jsonSchemaPropertyToZod(prop) {
   let base;
-  if (Array.isArray(prop.enum)) base = external_exports.enum(prop.enum);
+  if (Array.isArray(prop.enum) && prop.enum.length > 0) base = external_exports.enum(prop.enum);
   else switch (prop.type) {
     case "string":
       base = external_exports.string();
@@ -34279,12 +34279,22 @@ function jsonSchemaPropertyToZod(prop) {
     case "boolean":
       base = external_exports.boolean();
       break;
-    case "array":
+    case "array": {
       base = prop.items ? external_exports.array(jsonSchemaPropertyToZod(prop.items)) : external_exports.array(external_exports.unknown());
+      const minItems = typeof prop.minItems === "number" ? prop.minItems : void 0;
+      if (minItems !== void 0) base = base.min(minItems);
       break;
-    case "object":
-      base = external_exports.record(external_exports.string(), external_exports.unknown());
+    }
+    case "object": {
+      if (prop.properties && typeof prop.properties === "object" && !Array.isArray(prop.properties)) {
+        base = external_exports.object(jsonSchemaToZodShape(prop));
+        if (prop.additionalProperties === false) base = base.strict();
+        else if (prop.additionalProperties === true) base = base.passthrough();
+      } else {
+        base = external_exports.record(external_exports.string(), external_exports.unknown());
+      }
       break;
+    }
     default:
       base = external_exports.unknown();
   }
