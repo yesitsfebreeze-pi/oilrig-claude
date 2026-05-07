@@ -127,7 +127,6 @@
     "bundle/",
     "src/",
     "assets/",
-    "CHANGELOG.md",
     "LICENSE",
     "README.md",
     "package.json"
