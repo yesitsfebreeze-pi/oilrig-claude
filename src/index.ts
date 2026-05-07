@@ -426,7 +426,7 @@ function syncSharedSession(
 
 // --- Provider helpers: tool name mapping ---
 
-function mapToolName(name: string, customToolNameToPi?: Map<string, string>): string {
+export function mapToolName(name: string, customToolNameToPi?: Map<string, string>): string {
 	const normalized = name.toLowerCase();
 	const builtin = SDK_TO_PI_TOOL_NAME[normalized];
 	if (builtin) return builtin;
@@ -434,7 +434,14 @@ function mapToolName(name: string, customToolNameToPi?: Map<string, string>): st
 		const mapped = customToolNameToPi.get(name) ?? customToolNameToPi.get(normalized);
 		if (mapped) return mapped;
 	}
-	if (normalized.startsWith(MCP_TOOL_PREFIX)) return name.slice(MCP_TOOL_PREFIX.length);
+	for (const prefix of [
+		MCP_TOOL_PREFIX,
+		`mcp__${MCP_SERVER_NAME.replace(/-/g, "_")}__`,
+		`mcp/${MCP_SERVER_NAME}/`,
+		`mcp/${MCP_SERVER_NAME.replace(/-/g, "_")}/`,
+	]) {
+		if (normalized.startsWith(prefix)) return normalized.slice(prefix.length);
+	}
 	return name;
 }
 

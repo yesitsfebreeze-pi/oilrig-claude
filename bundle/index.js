@@ -33843,7 +33843,14 @@ function mapToolName(name, customToolNameToPi) {
     const mapped = customToolNameToPi.get(name) ?? customToolNameToPi.get(normalized);
     if (mapped) return mapped;
   }
-  if (normalized.startsWith(MCP_TOOL_PREFIX)) return name.slice(MCP_TOOL_PREFIX.length);
+  for (const prefix of [
+    MCP_TOOL_PREFIX,
+    `mcp__${MCP_SERVER_NAME.replace(/-/g, "_")}__`,
+    `mcp/${MCP_SERVER_NAME}/`,
+    `mcp/${MCP_SERVER_NAME.replace(/-/g, "_")}/`
+  ]) {
+    if (normalized.startsWith(prefix)) return normalized.slice(prefix.length);
+  }
   return name;
 }
 var SDK_KEY_RENAMES = {
@@ -34434,5 +34441,6 @@ function index_default(pi) {
 export {
   CLAUDE_BRIDGE_TOOL_ISOLATION,
   DISALLOWED_BUILTIN_TOOLS,
-  index_default as default
+  index_default as default,
+  mapToolName
 };
