@@ -6,6 +6,7 @@ import type { Base64ImageSource, ContentBlockParam, MessageParam } from "@anthro
 import { createSession, deleteSession, openSession, repairToolPairing } from "cc-session-io";
 import { createHash } from "crypto";
 import { accessSync, appendFileSync, constants as fsConstants, mkdirSync, realpathSync, statSync } from "fs";
+import { resolve as pathResolve } from "path";
 import { homedir } from "os";
 import { delimiter, dirname, join } from "path";
 import { PROVIDER_ID, messageContentToText, convertPiMessages } from "./convert.js";
@@ -238,9 +239,47 @@ function claudeSessionExists(sessionId: string, cwd: string): boolean {
 	}
 }
 
-function restoreSharedSessionFromPi(ctx: { sessionManager?: unknown }): void {
+function canonicalize(p: string | undefined): string | undefined {
+	if (!p) return undefined;
+	try { return realpathSync.native(p); } catch { return pathResolve(p); }
+}
+
+// Decides whether a persisted bridge-session marker is safe to restore.
+//
+// The fork case is the load-bearing one: pi/core's createBranchedSession copies
+// every non-label entry from root→leaf into the new session file. That includes
+// our claude-bridge-session markers from the parent. Restoring from them would
+// --resume parent's Claude jsonl on the fork's first turn, leaking conversation
+// past the fork point.
+//
+// Returns undefined when the entry is safe to use, or a short rejection reason
+// for diagnostic logging. Old entries without piSessionId always reject, which
+// degrades safely to the rebuild path.
+export function shouldRestorePersistedBridgeEntry(
+	persisted: { piSessionId?: string; cwd: string },
+	currentPiSessionId: string | undefined,
+	currentCwd: string | undefined,
+): string | undefined {
+	if (!persisted.piSessionId) return "missing piSessionId";
+	if (currentPiSessionId && persisted.piSessionId !== currentPiSessionId) {
+		return `piSessionId mismatch (persisted=${persisted.piSessionId} current=${currentPiSessionId})`;
+	}
+	if (currentCwd && canonicalize(persisted.cwd) !== canonicalize(currentCwd)) {
+		return `cwd mismatch (persisted=${persisted.cwd} current=${currentCwd})`;
+	}
+	return undefined;
+}
+
+export function restoreSharedSessionFromPi(ctx: { sessionManager?: unknown; cwd?: string }): void {
 	const persisted = latestPersistedBridgeSession(ctx.sessionManager);
 	if (!persisted) return;
+	const currentPiSessionId = typeof (ctx.sessionManager as any)?.getSessionId === "function" ? (ctx.sessionManager as any).getSessionId() : undefined;
+	const currentCwd = typeof (ctx.sessionManager as any)?.getCwd === "function" ? (ctx.sessionManager as any).getCwd() : ctx.cwd;
+	const rejection = shouldRestorePersistedBridgeEntry(persisted, currentPiSessionId, currentCwd);
+	if (rejection) {
+		debug(`restoreSharedSession: ${rejection} — forcing rebuild`);
+		return;
+	}
 	const built = readBuiltSessionContext(ctx.sessionManager);
 	if (!built) return;
 	const cursor = Math.max(0, Math.min(persisted.cursor, built.messages.length));
@@ -1292,7 +1331,11 @@ export default function (pi: ExtensionAPI) {
 		if (event.reason === "new" || event.reason === "resume" || event.reason === "fork") {
 			clearSession(`session_start:${event.reason}`);
 		}
-		if (event.reason === "startup" || event.reason === "resume" || event.reason === "fork") restoreSharedSessionFromPi(ctx);
+		// Note: "fork" intentionally omitted from restoration. createBranchedSession
+		// copies the parent's persisted bridge entries into the fork; restoring from
+		// them would --resume the parent's Claude jsonl and leak conversation past the
+		// fork point. Letting the first fork turn rebuild is the correct path.
+		if (event.reason === "startup" || event.reason === "resume") restoreSharedSessionFromPi(ctx);
 	});
 	pi.on("session_shutdown", () => clearSession("session_shutdown"));
 	pi.on("message_end", (event, ctx) => {

@@ -19186,6 +19186,7 @@ function readSession(jsonlPath, projectPath) {
 // src/index.ts
 import { createHash } from "crypto";
 import { accessSync, appendFileSync as appendFileSync3, constants as fsConstants, mkdirSync as mkdirSync3, realpathSync as realpathSync3, statSync as statSync3 } from "fs";
+import { resolve as pathResolve } from "path";
 import { homedir as homedir5 } from "os";
 import { delimiter, dirname as dirname5, join as join5 } from "path";
 
@@ -34540,9 +34541,34 @@ function claudeSessionExists(sessionId, cwd) {
     return false;
   }
 }
+function canonicalize(p4) {
+  if (!p4) return void 0;
+  try {
+    return realpathSync3.native(p4);
+  } catch {
+    return pathResolve(p4);
+  }
+}
+function shouldRestorePersistedBridgeEntry(persisted, currentPiSessionId, currentCwd) {
+  if (!persisted.piSessionId) return "missing piSessionId";
+  if (currentPiSessionId && persisted.piSessionId !== currentPiSessionId) {
+    return `piSessionId mismatch (persisted=${persisted.piSessionId} current=${currentPiSessionId})`;
+  }
+  if (currentCwd && canonicalize(persisted.cwd) !== canonicalize(currentCwd)) {
+    return `cwd mismatch (persisted=${persisted.cwd} current=${currentCwd})`;
+  }
+  return void 0;
+}
 function restoreSharedSessionFromPi(ctx2) {
   const persisted = latestPersistedBridgeSession(ctx2.sessionManager);
   if (!persisted) return;
+  const currentPiSessionId = typeof ctx2.sessionManager?.getSessionId === "function" ? ctx2.sessionManager.getSessionId() : void 0;
+  const currentCwd = typeof ctx2.sessionManager?.getCwd === "function" ? ctx2.sessionManager.getCwd() : ctx2.cwd;
+  const rejection = shouldRestorePersistedBridgeEntry(persisted, currentPiSessionId, currentCwd);
+  if (rejection) {
+    debug(`restoreSharedSession: ${rejection} \u2014 forcing rebuild`);
+    return;
+  }
   const built = readBuiltSessionContext(ctx2.sessionManager);
   if (!built) return;
   const cursor = Math.max(0, Math.min(persisted.cursor, built.messages.length));
@@ -35318,7 +35344,7 @@ function index_default(pi) {
     if (event.reason === "new" || event.reason === "resume" || event.reason === "fork") {
       clearSession(`session_start:${event.reason}`);
     }
-    if (event.reason === "startup" || event.reason === "resume" || event.reason === "fork") restoreSharedSessionFromPi(ctx2);
+    if (event.reason === "startup" || event.reason === "resume") restoreSharedSessionFromPi(ctx2);
   });
   pi.on("session_shutdown", () => clearSession("session_shutdown"));
   pi.on("message_end", (event, ctx2) => {
@@ -35352,5 +35378,7 @@ export {
   CLAUDE_BRIDGE_TOOL_ISOLATION,
   DISALLOWED_BUILTIN_TOOLS,
   index_default as default,
-  mapToolName
+  mapToolName,
+  restoreSharedSessionFromPi,
+  shouldRestorePersistedBridgeEntry
 };

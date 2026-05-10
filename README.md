@@ -27,7 +27,7 @@ Restart Pi after installation.
 
 - `claude-bridge/claude-opus-4-7`, Sonnet, and Haiku models in `/model`.
 - Pi tool calls bridged to Claude Code through a local MCP server.
-- Session reuse/rebuild so Claude Code follows Pi history across normal turns, `/compact`, forks, tree navigation, and abort recovery.
+- Session reuse/rebuild so Claude Code follows Pi history across normal turns, `/compact`, tree navigation, and abort recovery. Forks rebuild on the first turn so the fork never inherits the parent's external Claude jsonl.
 - Thinking-level forwarding, summarized Opus thinking display, MCP isolation, and Claude cloud-MCP suppression to reduce token overhead.
 - Optional forwarding of Pi-only context that upstream does not pass to Claude Code.
 
