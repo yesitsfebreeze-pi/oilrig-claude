@@ -115,11 +115,7 @@ export function buildPromptContextAppend(systemPrompt: string | undefined, cwd: 
 	}
 
 	if (settings.includeCavemanHook) {
-		const caveman = extractBlockByMarkers(systemPrompt, [
-			/^Caveman communication mode active/m,
-			/^Token efficiency mode: terse smart caveman/m,
-			/^Caveman mode is active/m,
-		]);
+		const caveman = extractBlockByMarkers(systemPrompt, [/^You MUST respond in caveman /m]);
 		if (caveman) {
 			parts.push(`### before_agent_start: caveman\n\n${caveman}`);
 			labels.push("caveman hook");

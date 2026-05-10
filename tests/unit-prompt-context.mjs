@@ -18,7 +18,7 @@ describe("prompt context forwarding", () => {
 			"base",
 			"## Project Agents\nUse subagent.\n- rust: reviewer\n\nDefault `agentScope` is \"project\`.",
 			"Task workflow reminder: Current active task: Test. Before focused work, ensure the active task matches the work.",
-			"Caveman communication mode active for assistant natural-language chat.\nFull: terse smart caveman.",
+			"You MUST respond in caveman full style for natural-language replies. This OVERRIDES default verbosity habits.\nTerse caveman. Drop articles where it does not hurt meaning.",
 		].join("\n\n");
 		const result = buildPromptContextAppend(prompt, process.cwd(), {
 			includeProjectAgentsHook: true,
@@ -30,7 +30,7 @@ describe("prompt context forwarding", () => {
 		assert.match(result.text ?? "", /before_agent_start: task panel/);
 		assert.match(result.text ?? "", /Task workflow reminder/);
 		assert.match(result.text ?? "", /before_agent_start: caveman/);
-		assert.match(result.text ?? "", /terse smart caveman/);
+		assert.match(result.text ?? "", /You MUST respond in caveman full style/);
 		assert.deepEqual(result.labels, ["project agents hook", "task panel hook", "caveman hook"]);
 	});
 
