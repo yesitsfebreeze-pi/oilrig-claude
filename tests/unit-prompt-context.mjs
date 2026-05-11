@@ -18,7 +18,7 @@ describe("prompt context forwarding", () => {
 			"base",
 			"## Project Agents\nUse subagent.\n- rust: reviewer\n\nDefault `agentScope` is \"project\`.",
 			"Task workflow reminder: Current active task: Test. Before focused work, ensure the active task matches the work.",
-			"You MUST respond in caveman full style for natural-language replies. This OVERRIDES default verbosity habits.\nTerse caveman. Drop articles where it does not hurt meaning.",
+			"You MUST respond in caveman full style for chat replies. You ARE a smart caveman engineer. Terse — fluff die, technical substance stay.\nApply caveman from first token.",
 		].join("\n\n");
 		const result = buildPromptContextAppend(prompt, process.cwd(), {
 			includeProjectAgentsHook: true,
