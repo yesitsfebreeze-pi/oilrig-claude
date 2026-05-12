@@ -1,10 +1,20 @@
 # pi-claude-bridge
+
 ![Claude bridge demo response](https://raw.githubusercontent.com/vanillagreencom/vstack/main/pi-extensions/pi-claude-bridge/assets/bridge-demo.png)
 ![Claude Bridge settings panel](https://raw.githubusercontent.com/vanillagreencom/vstack/main/pi-extensions/pi-claude-bridge/assets/settings-panel.png)
 
-Claude Code provider bridge for Pi. It registers `claude-bridge/*` models and routes Pi turns through the Claude Agent SDK while keeping Pi's tools in the Pi TUI.
+Run Claude Code as a Pi provider. Adds `claude-bridge/*` models to `/model` and routes Pi turns through the Claude Agent SDK while keeping Pi's tools and TUI.
 
-This package is a vstack fork of [`elidickinson/pi-claude-bridge`](https://github.com/elidickinson/pi-claude-bridge). The provider, MCP tool bridge, session sync, streaming, and Claude Code SDK plumbing come from that project; this fork removes the AskClaude tool and adds vstack-controlled prompt-context forwarding.
+Forked from [`elidickinson/pi-claude-bridge`](https://github.com/elidickinson/pi-claude-bridge). The provider, MCP bridge, session sync, and SDK plumbing come from upstream; this fork removes the AskClaude tool and adds opt-in forwarding for Pi prompt context.
+
+## Highlights
+
+- `claude-bridge/claude-opus-4-7`, Sonnet, and Haiku in `/model`.
+- Pi tool calls run on Pi; Claude Code handles reasoning.
+- Session continuity across normal turns, `/compact`, tree navigation, and abort recovery.
+- Thinking-level forwarding with summarized Opus thinking display.
+- MCP isolation and Claude cloud-MCP suppression to keep tokens lean.
+- Opt-in forwarding of `APPEND_SYSTEM.md` and recognized Pi prompt hooks.
 
 ## Install
 
@@ -23,47 +33,48 @@ vstack add vanillagreencom/vstack --pi-extension pi-claude-bridge --harness pi -
 
 Restart Pi after installation.
 
-## What it provides
-
-- `claude-bridge/claude-opus-4-7`, Sonnet, and Haiku models in `/model`.
-- Pi tool calls bridged to Claude Code through a local MCP server.
-- Session reuse/rebuild so Claude Code follows Pi history across normal turns, `/compact`, tree navigation, and abort recovery. Forks rebuild on the first turn so the fork never inherits the parent's external Claude jsonl.
-- Thinking-level forwarding, summarized Opus thinking display, MCP isolation, and Claude cloud-MCP suppression to reduce token overhead.
-- Optional forwarding of Pi-only context that upstream does not pass to Claude Code.
-
 ## Prompt context
 
 Default behavior matches upstream: append `AGENTS.md` plus Pi's skills block to Claude Code's `claude_code` preset prompt.
 
-Extra Pi prompt context is **off by default** and can be enabled in `/extensions:settings` → `Claude Bridge`:
-
-| Setting | Default | Effect |
-| --- | --- | --- |
-| `includeAppendSystemPromptMd` | off | Forward project/global `APPEND_SYSTEM.md`, including `.pi/APPEND_SYSTEM.md`. |
-| `includeProjectAgentsHook` | off | Forward recognized `pi-agents-tmux` `before_agent_start` additions such as the Project Agents/Subagents list. |
-| `includeTaskPanelHook` | off | Forward recognized `pi-task-panel` workflow reminders. |
-| `includeCavemanHook` | off | Forward recognized `pi-caveman` response-style prompt additions. |
-
-The bridge detects these hook additions from the effective Pi system prompt for the current turn and forwards only enabled recognized blocks.
+Extra Pi context is off by default. Enable per item in the extension manager when you want Claude Code to see prompt blocks that other Pi extensions add to your session.
 
 ## Settings
 
-| Setting | Default | Notes |
-| --- | --- | --- |
-| `enabled` | on | Register the Claude bridge provider; reload required. |
-| `appendSystemPrompt` | on | Forward `AGENTS.md` + skills. |
-| `strictMcpConfig` | on | When Claude Code filesystem settings are loaded, block filesystem MCP auto-loads; Pi owns tool execution. |
-| `pathToClaudeCodeExecutable` | auto | Explicit `claude` binary path; empty auto-detects `claude` or `claude-code` on PATH. |
+All settings live in the extension manager under **Claude Bridge**.
 
-Legacy config files are still read: `~/.pi/agent/claude-bridge.json` and `.pi/claude-bridge.json`. vstack extension-manager settings override them.
+### General
 
-## Differences from upstream
+| Setting | What it does |
+| --- | --- |
+| Enable Claude bridge provider | Register `claude-bridge/*` models. Reload required. |
 
-- No AskClaude tool; this package is provider-only.
-- vstack extension-manager settings for prompt forwarding and Claude Code options.
-- Bundled runtime dependencies for vstack installs; the bridge auto-detects the local Claude Code executable.
-- Opt-in delivery of `APPEND_SYSTEM.md` and recognized Pi `before_agent_start` prompt hooks.
-- Keeps upstream provider fixes: ID-based tool-result matching, compact/session rebuild handling, abort recovery, skill read-tool rewriting, strict MCP config, cloud MCP suppression, and Opus 4.7 thinking display forcing.
+### Base prompt
+
+| Setting | What it does |
+| --- | --- |
+| Forward AGENTS.md + skills | Append AGENTS.md and Pi's skills block. |
+
+### Pi prompt context
+
+| Setting | What it does |
+| --- | --- |
+| Forward APPEND_SYSTEM.md | Forward project/global `APPEND_SYSTEM.md` content. |
+
+### Pi prompt hooks
+
+| Setting | What it does |
+| --- | --- |
+| Forward project agents hook | Forward `pi-agents-tmux` Project Agents/Subagents list. |
+| Forward task panel hook | Forward `pi-task-panel` workflow reminders. |
+| Forward caveman hook | Forward `pi-caveman` response-style directives. |
+
+### Claude Code
+
+| Setting | What it does |
+| --- | --- |
+| Strict MCP config | Block filesystem MCP auto-loads; Pi owns tools. |
+| Claude executable path | Explicit `claude` binary path; empty auto-detects. |
 
 ## Debugging
 
