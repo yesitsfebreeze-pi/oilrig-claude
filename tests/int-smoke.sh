@@ -26,18 +26,18 @@ run() {
     echo "$output" > "$logfile"
     if [ -n "$output" ]; then
       echo "PASS"
-      ((PASS++))
+      ((PASS+=1))
     else
       echo "FAIL (empty output)"
       echo "  Log: $logfile"
-      ((FAIL++))
+      ((FAIL+=1))
     fi
   else
     local rc=$?
     echo "${output:-}" > "$logfile" 2>/dev/null || true
     echo "FAIL (exit $rc)"
     echo "  Log: $logfile"
-    ((FAIL++))
+    ((FAIL+=1))
   fi
   kill_descendants
 }
