@@ -41,7 +41,7 @@ Extra Pi context is off by default. Enable per item in the extension manager whe
 
 ## Settings
 
-All settings live in the extension manager under **Claude Bridge**.
+Open `/extensions:settings`; settings appear under the **Claude Bridge** tab.
 
 ### General
 
