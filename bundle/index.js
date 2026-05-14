@@ -19597,8 +19597,7 @@ function tryParseJson(path) {
   if (!existsSync3(path)) return {};
   try {
     return JSON.parse(readFileSync4(path, "utf-8"));
-  } catch (e2) {
-    console.error(`claude-bridge: failed to parse ${path}: ${e2}`);
+  } catch {
     return {};
   }
 }
