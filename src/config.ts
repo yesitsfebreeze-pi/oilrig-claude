@@ -73,8 +73,9 @@ export function tryParseJson(path: string): Partial<Config> {
 	if (!existsSync(path)) return {};
 	try {
 		return JSON.parse(readFileSync(path, "utf-8"));
-	} catch (e) {
-		console.error(`claude-bridge: failed to parse ${path}: ${e}`);
+	} catch {
+		// Malformed optional config should not write raw terminal diagnostics;
+		// stdout/stderr output can corrupt active Pi TUI widgets.
 		return {};
 	}
 }
