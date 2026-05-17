@@ -76,8 +76,15 @@ function extractHeadingSection(systemPrompt: string | undefined, headings: strin
 	}
 	if (start < 0) return undefined;
 	const rest = systemPrompt.slice(start).trim();
-	const nextHeading = rest.slice(1).search(/\n##\s+/);
-	return (nextHeading >= 0 ? rest.slice(0, nextHeading + 1) : rest).trim();
+	const endCandidates = [
+		rest.slice(1).search(/\n##\s+/),
+		rest.search(/\n<\/project_instructions>/),
+		rest.search(/\n<\/project_context>/),
+	]
+		.map((index, offset) => (index >= 0 && offset === 0 ? index + 1 : index))
+		.filter((index) => index >= 0);
+	const end = endCandidates.length > 0 ? Math.min(...endCandidates) : -1;
+	return (end >= 0 ? rest.slice(0, end) : rest).trim();
 }
 
 function extractBlockByMarkers(systemPrompt: string | undefined, markers: RegExp[]): string | undefined {
@@ -93,7 +100,7 @@ export function buildPromptContextAppend(systemPrompt: string | undefined, cwd: 
 
 	if (settings.includeAppendSystemPromptMd) {
 		for (const file of readAppendSystemPromptFiles(cwd)) {
-			parts.push(`### ${file.label}\n\n${file.content}`);
+			parts.push(xmlBlock("append_system_prompt", { label: file.label }, file.content));
 			labels.push(file.label);
 		}
 	}
@@ -101,7 +108,7 @@ export function buildPromptContextAppend(systemPrompt: string | undefined, cwd: 
 	if (settings.includeProjectAgentsHook) {
 		const projectAgents = extractHeadingSection(systemPrompt, ["## Project Agents", "## Project Subagents"]);
 		if (projectAgents) {
-			parts.push(`### before_agent_start: project agents\n\n${projectAgents}`);
+			parts.push(xmlBlock("before_agent_start", { source: "project-agents" }, projectAgents));
 			labels.push("project agents hook");
 		}
 	}
@@ -109,7 +116,7 @@ export function buildPromptContextAppend(systemPrompt: string | undefined, cwd: 
 	if (settings.includeTaskPanelHook) {
 		const taskReminder = extractBlockByMarkers(systemPrompt, [/^Task workflow reminder:/]);
 		if (taskReminder) {
-			parts.push(`### before_agent_start: task panel\n\n${taskReminder}`);
+			parts.push(xmlBlock("before_agent_start", { source: "task-panel" }, taskReminder));
 			labels.push("task panel hook");
 		}
 	}
@@ -117,7 +124,7 @@ export function buildPromptContextAppend(systemPrompt: string | undefined, cwd: 
 	if (settings.includeCavemanHook) {
 		const caveman = extractBlockByMarkers(systemPrompt, [/^You MUST respond in caveman /m]);
 		if (caveman) {
-			parts.push(`### before_agent_start: caveman\n\n${caveman}`);
+			parts.push(xmlBlock("before_agent_start", { source: "caveman" }, caveman));
 			labels.push("caveman hook");
 		}
 	}
@@ -125,10 +132,37 @@ export function buildPromptContextAppend(systemPrompt: string | undefined, cwd: 
 	if (parts.length === 0) return { labels };
 	return {
 		labels,
-		text: [
-			"## Forwarded Pi Context",
-			"The following content was explicitly enabled in pi-claude-bridge settings and comes from Pi prompt files or before_agent_start prompt hooks.",
-			...parts,
-		].join("\n\n"),
+		text: xmlBlock(
+			"forwarded_pi_context",
+			{},
+			[
+				"The following content was explicitly enabled in pi-claude-bridge settings and comes from Pi prompt files or before_agent_start prompt hooks.",
+				...parts,
+			].join("\n\n"),
+			false,
+		),
 	};
+}
+
+function escapeXmlAttr(value: string): string {
+	return value
+		.replace(/&/g, "&amp;")
+		.replace(/"/g, "&quot;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;");
+}
+
+function escapeXmlText(value: string): string {
+	return value
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;");
+}
+
+function xmlBlock(tag: string, attrs: Record<string, string>, content: string, escapeContent = true): string {
+	const attrText = Object.entries(attrs)
+		.map(([key, value]) => ` ${key}="${escapeXmlAttr(value)}"`)
+		.join("");
+	const body = escapeContent ? escapeXmlText(content.trim()) : content.trim();
+	return `<${tag}${attrText}>\n${body}\n</${tag}>`;
 }

@@ -19758,8 +19758,13 @@ function extractHeadingSection(systemPrompt, headings) {
   }
   if (start < 0) return void 0;
   const rest = systemPrompt.slice(start).trim();
-  const nextHeading = rest.slice(1).search(/\n##\s+/);
-  return (nextHeading >= 0 ? rest.slice(0, nextHeading + 1) : rest).trim();
+  const endCandidates = [
+    rest.slice(1).search(/\n##\s+/),
+    rest.search(/\n<\/project_instructions>/),
+    rest.search(/\n<\/project_context>/)
+  ].map((index, offset) => index >= 0 && offset === 0 ? index + 1 : index).filter((index) => index >= 0);
+  const end = endCandidates.length > 0 ? Math.min(...endCandidates) : -1;
+  return (end >= 0 ? rest.slice(0, end) : rest).trim();
 }
 function extractBlockByMarkers(systemPrompt, markers) {
   for (const block of splitPromptBlocks(systemPrompt)) {
@@ -19772,48 +19777,57 @@ function buildPromptContextAppend(systemPrompt, cwd, settings) {
   const labels = [];
   if (settings.includeAppendSystemPromptMd) {
     for (const file2 of readAppendSystemPromptFiles(cwd)) {
-      parts.push(`### ${file2.label}
-
-${file2.content}`);
+      parts.push(xmlBlock("append_system_prompt", { label: file2.label }, file2.content));
       labels.push(file2.label);
     }
   }
   if (settings.includeProjectAgentsHook) {
     const projectAgents = extractHeadingSection(systemPrompt, ["## Project Agents", "## Project Subagents"]);
     if (projectAgents) {
-      parts.push(`### before_agent_start: project agents
-
-${projectAgents}`);
+      parts.push(xmlBlock("before_agent_start", { source: "project-agents" }, projectAgents));
       labels.push("project agents hook");
     }
   }
   if (settings.includeTaskPanelHook) {
     const taskReminder = extractBlockByMarkers(systemPrompt, [/^Task workflow reminder:/]);
     if (taskReminder) {
-      parts.push(`### before_agent_start: task panel
-
-${taskReminder}`);
+      parts.push(xmlBlock("before_agent_start", { source: "task-panel" }, taskReminder));
       labels.push("task panel hook");
     }
   }
   if (settings.includeCavemanHook) {
     const caveman = extractBlockByMarkers(systemPrompt, [/^You MUST respond in caveman /m]);
     if (caveman) {
-      parts.push(`### before_agent_start: caveman
-
-${caveman}`);
+      parts.push(xmlBlock("before_agent_start", { source: "caveman" }, caveman));
       labels.push("caveman hook");
     }
   }
   if (parts.length === 0) return { labels };
   return {
     labels,
-    text: [
-      "## Forwarded Pi Context",
-      "The following content was explicitly enabled in pi-claude-bridge settings and comes from Pi prompt files or before_agent_start prompt hooks.",
-      ...parts
-    ].join("\n\n")
+    text: xmlBlock(
+      "forwarded_pi_context",
+      {},
+      [
+        "The following content was explicitly enabled in pi-claude-bridge settings and comes from Pi prompt files or before_agent_start prompt hooks.",
+        ...parts
+      ].join("\n\n"),
+      false
+    )
   };
+}
+function escapeXmlAttr(value) {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function escapeXmlText(value) {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function xmlBlock(tag, attrs, content, escapeContent = true) {
+  const attrText = Object.entries(attrs).map(([key, value]) => ` ${key}="${escapeXmlAttr(value)}"`).join("");
+  const body = escapeContent ? escapeXmlText(content.trim()) : content.trim();
+  return `<${tag}${attrText}>
+${body}
+</${tag}>`;
 }
 
 // node_modules/zod/v4/classic/external.js

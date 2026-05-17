@@ -108,15 +108,15 @@
     "@earendil-works/pi-coding-agent": "*"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "^0.74.0",
-    "@earendil-works/pi-coding-agent": "^0.74.0",
+    "@earendil-works/pi-ai": "^0.75.0",
+    "@earendil-works/pi-coding-agent": "^0.75.0",
     "@types/node": "^24.3.0",
     "esbuild": "^0.28.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
   },
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node20 --outfile=bundle/index.js --external:@earendil-works/pi-ai --external:@earendil-works/pi-coding-agent",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=bundle/index.js --external:@earendil-works/pi-ai --external:@earendil-works/pi-coding-agent",
     "prepack": "npm run build",
     "test:unit": "node --import tsx --test tests/unit-*.mjs",
     "test": "set -a && [ -f .env.test ] && . ./.env.test; set +a && npm run test:unit && tests/int-smoke.sh && tests/int-multi-turn.sh && tests/int-cache.sh && node --import tsx --test tests/int-*.mjs",
@@ -145,6 +145,14 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.19.0"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-ai": {
+      "optional": true
+    },
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    }
   }
 }
