@@ -74,7 +74,12 @@ Open `/extensions:settings`; settings appear under the **Claude Bridge** tab.
 | Setting | What it does |
 | --- | --- |
 | Strict MCP config | Block filesystem MCP auto-loads; Pi owns tools. |
+| Allow extra usage helper | Let the bridge launch Claude Code's `/extra-usage` flow when extra usage is required. Billing/admin approval still happens in Claude's browser page. |
 | Claude executable path | Explicit `claude` binary path; empty auto-detects. |
+
+## Extra usage
+
+Claude Code's `/extra-usage` local command works through the Claude Agent SDK. In Pi, use `/claude-bridge extra` (or `/claude-bridge:extra`) to run that flow from claude-bridge. Use `/claude-bridge extra on` to enable the helper for the current Pi session and run it immediately; persist the behavior with **Allow extra usage helper** in `/extensions:settings`.
 
 ## Debugging
 

@@ -86,6 +86,15 @@
           "apply": "live"
         },
         {
+          "key": "allowExtraUsage",
+          "label": "Allow extra usage helper",
+          "description": "Allow claude-bridge to launch Claude Code's /extra-usage flow when rate limits require extra usage. Billing/admin approval still happens in Claude's browser page.",
+          "type": "boolean",
+          "default": false,
+          "category": "Claude Code",
+          "apply": "live"
+        },
+        {
           "key": "pathToClaudeCodeExecutable",
           "label": "Claude executable path",
           "description": "Optional explicit path to the claude binary. If empty, the bridge auto-detects claude or claude-code on PATH.",

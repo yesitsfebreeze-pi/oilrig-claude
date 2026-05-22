@@ -14,6 +14,7 @@ export interface Config {
 	/** Low-level Claude Agent SDK plumbing. Most users won't need these. */
 	provider?: {
 		appendSystemPrompt?: boolean;
+		allowExtraUsage?: boolean;
 		settingSources?: SettingSource[];
 		strictMcpConfig?: boolean;
 		pathToClaudeCodeExecutable?: string;
@@ -111,6 +112,8 @@ function managerToConfig(raw: SettingsRecord): Partial<Config> {
 
 	const appendSystemPrompt = boolFrom(raw, "appendSystemPrompt");
 	if (appendSystemPrompt !== undefined) provider.appendSystemPrompt = appendSystemPrompt;
+	const allowExtraUsage = boolFrom(raw, "allowExtraUsage");
+	if (allowExtraUsage !== undefined) provider.allowExtraUsage = allowExtraUsage;
 	const strictMcpConfig = boolFrom(raw, "strictMcpConfig");
 	if (strictMcpConfig !== undefined) provider.strictMcpConfig = strictMcpConfig;
 	const claudePath = stringFrom(raw, "pathToClaudeCodeExecutable");

@@ -19628,6 +19628,8 @@ function managerToConfig(raw) {
   const promptContext = {};
   const appendSystemPrompt = boolFrom(raw, "appendSystemPrompt");
   if (appendSystemPrompt !== void 0) provider.appendSystemPrompt = appendSystemPrompt;
+  const allowExtraUsage = boolFrom(raw, "allowExtraUsage");
+  if (allowExtraUsage !== void 0) provider.allowExtraUsage = allowExtraUsage;
   const strictMcpConfig = boolFrom(raw, "strictMcpConfig");
   if (strictMcpConfig !== void 0) provider.strictMcpConfig = strictMcpConfig;
   const claudePath = stringFrom(raw, "pathToClaudeCodeExecutable");
@@ -34660,6 +34662,7 @@ function diagDump(label, data) {
   debug(`DIAG: ${label} (see ${DIAG_LOG_PATH})`);
 }
 var ACTIVE_STREAM_SIMPLE_KEY = /* @__PURE__ */ Symbol.for("claude-bridge:activeStreamSimple");
+var COMMANDS_REGISTERED_KEY = /* @__PURE__ */ Symbol.for("claude-bridge:commandsRegistered");
 var SDK_TO_PI_TOOL_NAME = {
   read: "read",
   write: "write",
@@ -34708,6 +34711,77 @@ var CLAUDE_BRIDGE_TOOL_ISOLATION = {
 };
 var sharedSession = null;
 var extensionApi;
+var piUI;
+var extraUsageSessionOverride;
+var extraUsageHelperInFlight = null;
+function isExtraUsageRequiredMessage(value) {
+  let text;
+  if (typeof value === "string") text = value;
+  else if (value instanceof Error) text = value.message;
+  else {
+    try {
+      text = JSON.stringify(value ?? "");
+    } catch {
+      text = String(value);
+    }
+  }
+  return /extra[-\s]?usage|overage|extra usage billing|extra usage credits|1M context/i.test(text);
+}
+function extraUsageAllowed(config2) {
+  return extraUsageSessionOverride ?? config2.provider?.allowExtraUsage === true;
+}
+function sdkTextFromMessage(message) {
+  if (message.type === "result") return message.result;
+  if (message.type === "assistant") {
+    const content = message.message?.content;
+    if (!Array.isArray(content)) return void 0;
+    return content.map((block) => block?.type === "text" && typeof block.text === "string" ? block.text : "").filter(Boolean).join("\n");
+  }
+  return void 0;
+}
+async function runExtraUsageHelper(cwd, config2 = loadConfig(cwd)) {
+  const providerSettings = config2.provider ?? {};
+  const claudeExecutable = resolveClaudeExecutable(providerSettings.pathToClaudeCodeExecutable);
+  if (claudeExecutable) preflightClaudeExecutable(claudeExecutable, cwd);
+  const helperQuery = t7$({
+    prompt: "/extra-usage",
+    options: {
+      cwd,
+      env: { ...process.env, ENABLE_CLAUDEAI_MCP_SERVERS: "0", DISABLE_AUTO_COMPACT: "1" },
+      maxTurns: 1,
+      ...claudeExecutable ? { pathToClaudeCodeExecutable: claudeExecutable } : {},
+      spawnClaudeCodeProcess: spawnClaudeCodeWithDiagnostics,
+      ...makeCliDebugOptions("extra-usage")
+    }
+  });
+  const outputs = [];
+  try {
+    for await (const message of helperQuery) {
+      const text = sdkTextFromMessage(message)?.trim();
+      if (text && outputs[outputs.length - 1] !== text) outputs.push(text);
+    }
+  } finally {
+    helperQuery.close();
+  }
+  return outputs.join("\n").trim() || "Claude Code /extra-usage completed.";
+}
+function launchExtraUsageHelperIfAllowed(cwd, config2, reason) {
+  if (!extraUsageAllowed(config2)) return false;
+  if (extraUsageHelperInFlight) return true;
+  extraUsageHelperInFlight = runExtraUsageHelper(cwd, config2).then((message) => {
+    piUI?.notify(`Claude extra usage helper: ${message}`, "info");
+    return message;
+  }).catch((error51) => {
+    const message = error51 instanceof Error ? error51.message : String(error51);
+    piUI?.notify(`Claude extra usage helper failed after ${reason}: ${message}`, "error");
+    throw error51;
+  }).finally(() => {
+    extraUsageHelperInFlight = null;
+  });
+  void extraUsageHelperInFlight.catch(() => {
+  });
+  return true;
+}
 var BRIDGE_SESSION_CUSTOM_TYPE = "claude-bridge-session";
 function fingerprintMessages(messages) {
   const normalized = messages.map((message) => {
@@ -35008,7 +35082,6 @@ function mapToolArgs(toolName, args) {
   }
   return result;
 }
-var piUI = null;
 function resolveMcpTools(context, excludeToolName) {
   const mcpTools = [];
   const customToolNameToSdk = /* @__PURE__ */ new Map();
@@ -35244,7 +35317,7 @@ function processAssistantMessage(message, model, customToolNameToPi) {
     c10.currentPiStream = null;
   }
 }
-async function consumeQuery(sdkQuery, customToolNameToPi, model, wasAborted) {
+async function consumeQuery(sdkQuery, customToolNameToPi, model, cwd, bridgeConfig, wasAborted) {
   let capturedSessionId;
   for await (const message of sdkQuery) {
     if (wasAborted()) break;
@@ -35265,6 +35338,14 @@ async function consumeQuery(sdkQuery, customToolNameToPi, model, wasAborted) {
           ctx().currentPiStream?.push({ type: "text_start", contentIndex: idx, partial: ctx().turnOutput });
           ctx().currentPiStream?.push({ type: "text_delta", contentIndex: idx, delta: text, partial: ctx().turnOutput });
           ctx().currentPiStream?.push({ type: "text_end", contentIndex: idx, content: text, partial: ctx().turnOutput });
+        } else if (message.subtype !== "success" && isExtraUsageRequiredMessage(message)) {
+          const errors = Array.isArray(message.errors) ? message.errors.join("\n") : message.subtype;
+          const openedExtraUsage = launchExtraUsageHelperIfAllowed(cwd, bridgeConfig, "result error");
+          ctx().turnOutput.stopReason = "error";
+          ctx().turnOutput.errorMessage = `${errors}${openedExtraUsage ? "\n\nOpened Claude Code /extra-usage helper. Complete billing/admin flow in the browser, then retry the prompt." : "\n\nRun /claude-bridge extra, or enable Allow extra usage helper in settings."}`;
+          ctx().currentPiStream?.push({ type: "error", reason: "error", error: ctx().turnOutput });
+          ctx().currentPiStream?.end();
+          ctx().currentPiStream = null;
         }
         break;
       case "system":
@@ -35280,7 +35361,9 @@ async function consumeQuery(sdkQuery, customToolNameToPi, model, wasAborted) {
         debug("consumeQuery: rate_limit_event", JSON.stringify(info).slice(0, 300));
         if (info?.status === "rejected") {
           const resetsAt = info.resetsAt ? new Date(info.resetsAt).toLocaleTimeString() : "unknown";
-          piUI?.notify(`Claude rate limited (${info.rateLimitType ?? "unknown"}) \u2014 resets at ${resetsAt}`, "warning");
+          const reason = `${info.rateLimitType ?? "unknown"} rate limit`;
+          const launchedExtraUsage = isExtraUsageRequiredMessage(info) && launchExtraUsageHelperIfAllowed(cwd, bridgeConfig, reason);
+          piUI?.notify(`Claude rate limited (${reason}) \u2014 resets at ${resetsAt}${launchedExtraUsage ? "; opened /extra-usage helper" : ""}`, "warning");
         } else if (info?.status === "allowed_warning") {
           piUI?.notify(`Claude rate limit warning: ${Math.round(info.utilization ?? 0)}% used (${info.rateLimitType ?? ""})`, "warning");
         }
@@ -35446,7 +35529,7 @@ function streamClaudeAgentSdk(model, context, options) {
     if (options.signal.aborted) onAbort();
     else options.signal.addEventListener("abort", onAbort, { once: true });
   }
-  consumeQuery(sdkQuery, customToolNameToPi, model, () => wasAborted).then(async ({ capturedSessionId }) => {
+  consumeQuery(sdkQuery, customToolNameToPi, model, cwd, bridgeConfig, () => wasAborted).then(async ({ capturedSessionId }) => {
     debug(`provider: consumeQuery completed, stopReason=${ctx().turnOutput?.stopReason}, error=${ctx().turnOutput?.errorMessage}, aborted=${wasAborted}`);
     if (wasAborted || options?.signal?.aborted) {
       if (sharedSession) sharedSession = { ...sharedSession, needsRebuild: true, forceRotate: true };
@@ -35482,7 +35565,7 @@ function streamClaudeAgentSdk(model, context, options) {
         ctx().activeQuery = contQuery;
         debug(`provider: continuation query, model=${model.id}, resume=${resumeId.slice(0, 8)}, prompt=${steerPrompt.slice(0, 60)}`);
         try {
-          const { capturedSessionId: contSid } = await consumeQuery(contQuery, customToolNameToPi, model, () => wasAborted);
+          const { capturedSessionId: contSid } = await consumeQuery(contQuery, customToolNameToPi, model, cwd, bridgeConfig, () => wasAborted);
           const sid = contSid ?? sharedSession?.sessionId;
           if (sid) {
             sharedSession = { sessionId: sid, cursor: sharedSession?.cursor ?? 0, cwd };
@@ -35500,6 +35583,7 @@ function streamClaudeAgentSdk(model, context, options) {
     finalizeCurrentStream(ctx().turnOutput?.stopReason);
   }).catch((error51) => {
     debug(`provider: query error, model=${model.id}, aborted=${Boolean(options?.signal?.aborted)}, error=`, error51);
+    const openedExtraUsage = isExtraUsageRequiredMessage(error51) && launchExtraUsageHelperIfAllowed(cwd, bridgeConfig, "query error");
     if ((wasAborted || options?.signal?.aborted) && sharedSession) {
       sharedSession = { ...sharedSession, needsRebuild: true, forceRotate: true };
     } else {
@@ -35508,7 +35592,7 @@ function streamClaudeAgentSdk(model, context, options) {
     ctx().deferredUserMessages = [];
     if (ctx().turnOutput) {
       ctx().turnOutput.stopReason = options?.signal?.aborted ? "aborted" : "error";
-      ctx().turnOutput.errorMessage = error51 instanceof Error ? error51.message : String(error51);
+      ctx().turnOutput.errorMessage = `${error51 instanceof Error ? error51.message : String(error51)}${openedExtraUsage ? "\n\nOpened Claude Code /extra-usage helper. Complete billing/admin flow in the browser, then retry the prompt." : ""}`;
     }
     ctx().currentPiStream?.push({ type: "error", reason: ctx().turnOutput?.stopReason ?? "error", error: ctx().turnOutput });
     ctx().currentPiStream?.end();
@@ -35531,11 +35615,98 @@ function streamClaudeAgentSdk(model, context, options) {
   });
   return stream;
 }
+function commandCwd(ctx2) {
+  const value = ctx2?.cwd;
+  return typeof value === "string" && value.length > 0 ? value : process.cwd();
+}
+async function tryOpenExtensionManagerSettings(ctx2) {
+  const host = globalThis;
+  const openQuickSettings = host[/* @__PURE__ */ Symbol.for("vstack.pi.extension-manager.open-quick-settings")];
+  if (typeof openQuickSettings !== "function") return false;
+  try {
+    await openQuickSettings(ctx2, "@vanillagreen/pi-claude-bridge");
+    return true;
+  } catch {
+    return false;
+  }
+}
+function showBridgeStatus(ctx2) {
+  const config2 = loadConfig(commandCwd(ctx2));
+  const configured = config2.provider?.allowExtraUsage === true;
+  const effective = extraUsageAllowed(config2);
+  ctx2.ui.notify([
+    `Claude bridge: ${config2.enabled === false ? "disabled" : "enabled"}`,
+    `Extra usage helper: ${effective ? "on" : "off"}${extraUsageSessionOverride !== void 0 ? " (session override)" : configured ? " (settings)" : ""}`,
+    `Use /claude-bridge extra to run Claude Code /extra-usage now.`,
+    `Use /claude-bridge extra on|off for this Pi session, or persist in settings manager.`
+  ].join("\n"), "info");
+}
+function registerBridgeCommands(pi) {
+  const guard = pi;
+  if (guard[COMMANDS_REGISTERED_KEY]) return;
+  guard[COMMANDS_REGISTERED_KEY] = true;
+  const runExtraUsage = async (ctx2) => {
+    const cwd = commandCwd(ctx2);
+    if (extraUsageHelperInFlight) {
+      ctx2.ui.notify("Claude extra usage helper already running.", "info");
+      await extraUsageHelperInFlight.catch(() => void 0);
+      return;
+    }
+    try {
+      ctx2.ui.notify("Claude extra usage helper starting\u2026", "info");
+      extraUsageHelperInFlight = runExtraUsageHelper(cwd).finally(() => {
+        extraUsageHelperInFlight = null;
+      });
+      const message = await extraUsageHelperInFlight;
+      ctx2.ui.notify(`Claude extra usage helper: ${message}`, "info");
+    } catch (error51) {
+      const message = error51 instanceof Error ? error51.message : String(error51);
+      ctx2.ui.notify(`Claude extra usage helper failed: ${message}`, "error");
+    }
+  };
+  pi.registerCommand("claude-bridge", {
+    description: "Claude bridge settings/status. Usage: /claude-bridge | /claude-bridge extra [on|off|status]",
+    handler: async (args, ctx2) => {
+      const parts = args.trim().split(/\s+/).filter(Boolean);
+      if (parts.length === 0) {
+        if (await tryOpenExtensionManagerSettings(ctx2)) return;
+        showBridgeStatus(ctx2);
+        return;
+      }
+      if (parts[0] === "extra" || parts[0] === "extra-usage") {
+        const action = parts[1];
+        if (action === "on" || action === "enable" || action === "enabled") {
+          extraUsageSessionOverride = true;
+          ctx2.ui.notify("Claude bridge extra usage helper enabled for this Pi session.", "info");
+          await runExtraUsage(ctx2);
+          return;
+        }
+        if (action === "off" || action === "disable" || action === "disabled") {
+          extraUsageSessionOverride = false;
+          ctx2.ui.notify("Claude bridge extra usage helper disabled for this Pi session.", "info");
+          return;
+        }
+        if (action === "status") {
+          showBridgeStatus(ctx2);
+          return;
+        }
+        await runExtraUsage(ctx2);
+        return;
+      }
+      showBridgeStatus(ctx2);
+    }
+  });
+  pi.registerCommand("claude-bridge:extra", {
+    description: "Run Claude Code /extra-usage through claude-bridge",
+    handler: async (_args, ctx2) => runExtraUsage(ctx2)
+  });
+}
 function index_default(pi) {
   extensionApi = pi;
   process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1";
   const config2 = loadConfig(process.cwd());
   debug("loadConfig:", JSON.stringify(config2));
+  registerBridgeCommands(pi);
   if (config2.enabled === false) {
     debug("provider: disabled by configuration");
     return;
@@ -35589,6 +35760,7 @@ export {
   DISALLOWED_BUILTIN_TOOLS,
   classifyClaudeExecutableBytes,
   index_default as default,
+  isExtraUsageRequiredMessage,
   mapToolName,
   preflightClaudeExecutable,
   restoreSharedSessionFromPi,
