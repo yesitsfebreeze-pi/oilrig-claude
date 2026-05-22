@@ -424,7 +424,6 @@ interface SessionState {
 let sharedSession: SessionState | null = null;
 let extensionApi: ExtensionAPI | undefined;
 let piUI: ExtensionUIContext | undefined;
-let extraUsageSessionOverride: boolean | undefined;
 let extraUsageHelperInFlight: Promise<string> | null = null;
 
 export function isExtraUsageRequiredMessage(value: unknown): boolean {
@@ -439,7 +438,7 @@ export function isExtraUsageRequiredMessage(value: unknown): boolean {
 }
 
 function extraUsageAllowed(config: Config): boolean {
-	return extraUsageSessionOverride ?? config.provider?.allowExtraUsage === true;
+	return config.provider?.allowExtraUsage === true;
 }
 
 function sdkTextFromMessage(message: SDKMessage): string | undefined {
@@ -1261,7 +1260,7 @@ async function consumeQuery(
 					const errors = Array.isArray((message as any).errors) ? (message as any).errors.join("\n") : message.subtype;
 					const openedExtraUsage = launchExtraUsageHelperIfAllowed(cwd, bridgeConfig, "result error");
 					ctx().turnOutput.stopReason = "error";
-					ctx().turnOutput.errorMessage = `${errors}${openedExtraUsage ? "\n\nOpened Claude Code /extra-usage helper. Complete billing/admin flow in the browser, then retry the prompt." : "\n\nRun /claude-bridge extra, or enable Allow extra usage helper in settings."}`;
+					ctx().turnOutput.errorMessage = `${errors}${openedExtraUsage ? "\n\nOpened Claude Code /extra-usage helper. Complete billing/admin flow in the browser, then retry the prompt." : "\n\nRun /claude-bridge:extra, or enable Allow extra usage helper in settings."}`;
 					ctx().currentPiStream?.push({ type: "error", reason: "error", error: ctx().turnOutput });
 					ctx().currentPiStream?.end();
 					ctx().currentPiStream = null;
@@ -1643,13 +1642,10 @@ async function tryOpenExtensionManagerSettings(ctx: { ui: ExtensionUIContext }):
 
 function showBridgeStatus(ctx: { ui: ExtensionUIContext; cwd?: string }): void {
 	const config = loadConfig(commandCwd(ctx));
-	const configured = config.provider?.allowExtraUsage === true;
-	const effective = extraUsageAllowed(config);
 	ctx.ui.notify([
 		`Claude bridge: ${config.enabled === false ? "disabled" : "enabled"}`,
-		`Extra usage helper: ${effective ? "on" : "off"}${extraUsageSessionOverride !== undefined ? " (session override)" : configured ? " (settings)" : ""}`,
-		`Use /claude-bridge extra to run Claude Code /extra-usage now.`,
-		`Use /claude-bridge extra on|off for this Pi session, or persist in settings manager.`,
+		`Extra usage auto-helper: ${extraUsageAllowed(config) ? "on" : "off"} (settings)`,
+		`Use /claude-bridge:extra to run Claude Code /extra-usage now.`,
 	].join("\n"), "info");
 }
 
@@ -1678,36 +1674,10 @@ function registerBridgeCommands(pi: ExtensionAPI): void {
 	};
 
 	pi.registerCommand("claude-bridge", {
-		description: "Claude bridge settings/status. Usage: /claude-bridge | /claude-bridge extra [on|off|status]",
+		description: "Open Claude bridge settings/status",
 		handler: async (args: string, ctx) => {
-			const parts = args.trim().split(/\s+/).filter(Boolean);
-			if (parts.length === 0) {
-				if (await tryOpenExtensionManagerSettings(ctx)) return;
-				showBridgeStatus(ctx);
-				return;
-			}
-
-			if (parts[0] === "extra" || parts[0] === "extra-usage") {
-				const action = parts[1];
-				if (action === "on" || action === "enable" || action === "enabled") {
-					extraUsageSessionOverride = true;
-					ctx.ui.notify("Claude bridge extra usage helper enabled for this Pi session.", "info");
-					await runExtraUsage(ctx);
-					return;
-				}
-				if (action === "off" || action === "disable" || action === "disabled") {
-					extraUsageSessionOverride = false;
-					ctx.ui.notify("Claude bridge extra usage helper disabled for this Pi session.", "info");
-					return;
-				}
-				if (action === "status") {
-					showBridgeStatus(ctx);
-					return;
-				}
-				await runExtraUsage(ctx);
-				return;
-			}
-
+			if (args.trim()) ctx.ui.notify("Unknown /claude-bridge argument. Use /claude-bridge:extra to run Claude Code /extra-usage.", "warning");
+			if (await tryOpenExtensionManagerSettings(ctx)) return;
 			showBridgeStatus(ctx);
 		},
 	});

@@ -79,7 +79,7 @@ Open `/extensions:settings`; settings appear under the **Claude Bridge** tab.
 
 ## Extra usage
 
-Claude Code's `/extra-usage` local command works through the Claude Agent SDK. In Pi, use `/claude-bridge extra` (or `/claude-bridge:extra`) to run that flow from claude-bridge. Use `/claude-bridge extra on` to enable the helper for the current Pi session and run it immediately; persist the behavior with **Allow extra usage helper** in `/extensions:settings`.
+Claude Code's `/extra-usage` local command works through the Claude Agent SDK. In Pi, use `/claude-bridge:extra` to run that flow from claude-bridge. Persist automatic launch on extra-usage errors with **Allow extra usage helper** in `/extensions:settings`.
 
 ## Debugging
 

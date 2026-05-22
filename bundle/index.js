@@ -34712,7 +34712,6 @@ var CLAUDE_BRIDGE_TOOL_ISOLATION = {
 var sharedSession = null;
 var extensionApi;
 var piUI;
-var extraUsageSessionOverride;
 var extraUsageHelperInFlight = null;
 function isExtraUsageRequiredMessage(value) {
   let text;
@@ -34728,7 +34727,7 @@ function isExtraUsageRequiredMessage(value) {
   return /extra[-\s]?usage|overage|extra usage billing|extra usage credits|1M context/i.test(text);
 }
 function extraUsageAllowed(config2) {
-  return extraUsageSessionOverride ?? config2.provider?.allowExtraUsage === true;
+  return config2.provider?.allowExtraUsage === true;
 }
 function sdkTextFromMessage(message) {
   if (message.type === "result") return message.result;
@@ -35342,7 +35341,7 @@ async function consumeQuery(sdkQuery, customToolNameToPi, model, cwd, bridgeConf
           const errors = Array.isArray(message.errors) ? message.errors.join("\n") : message.subtype;
           const openedExtraUsage = launchExtraUsageHelperIfAllowed(cwd, bridgeConfig, "result error");
           ctx().turnOutput.stopReason = "error";
-          ctx().turnOutput.errorMessage = `${errors}${openedExtraUsage ? "\n\nOpened Claude Code /extra-usage helper. Complete billing/admin flow in the browser, then retry the prompt." : "\n\nRun /claude-bridge extra, or enable Allow extra usage helper in settings."}`;
+          ctx().turnOutput.errorMessage = `${errors}${openedExtraUsage ? "\n\nOpened Claude Code /extra-usage helper. Complete billing/admin flow in the browser, then retry the prompt." : "\n\nRun /claude-bridge:extra, or enable Allow extra usage helper in settings."}`;
           ctx().currentPiStream?.push({ type: "error", reason: "error", error: ctx().turnOutput });
           ctx().currentPiStream?.end();
           ctx().currentPiStream = null;
@@ -35632,13 +35631,10 @@ async function tryOpenExtensionManagerSettings(ctx2) {
 }
 function showBridgeStatus(ctx2) {
   const config2 = loadConfig(commandCwd(ctx2));
-  const configured = config2.provider?.allowExtraUsage === true;
-  const effective = extraUsageAllowed(config2);
   ctx2.ui.notify([
     `Claude bridge: ${config2.enabled === false ? "disabled" : "enabled"}`,
-    `Extra usage helper: ${effective ? "on" : "off"}${extraUsageSessionOverride !== void 0 ? " (session override)" : configured ? " (settings)" : ""}`,
-    `Use /claude-bridge extra to run Claude Code /extra-usage now.`,
-    `Use /claude-bridge extra on|off for this Pi session, or persist in settings manager.`
+    `Extra usage auto-helper: ${extraUsageAllowed(config2) ? "on" : "off"} (settings)`,
+    `Use /claude-bridge:extra to run Claude Code /extra-usage now.`
   ].join("\n"), "info");
 }
 function registerBridgeCommands(pi) {
@@ -35665,34 +35661,10 @@ function registerBridgeCommands(pi) {
     }
   };
   pi.registerCommand("claude-bridge", {
-    description: "Claude bridge settings/status. Usage: /claude-bridge | /claude-bridge extra [on|off|status]",
+    description: "Open Claude bridge settings/status",
     handler: async (args, ctx2) => {
-      const parts = args.trim().split(/\s+/).filter(Boolean);
-      if (parts.length === 0) {
-        if (await tryOpenExtensionManagerSettings(ctx2)) return;
-        showBridgeStatus(ctx2);
-        return;
-      }
-      if (parts[0] === "extra" || parts[0] === "extra-usage") {
-        const action = parts[1];
-        if (action === "on" || action === "enable" || action === "enabled") {
-          extraUsageSessionOverride = true;
-          ctx2.ui.notify("Claude bridge extra usage helper enabled for this Pi session.", "info");
-          await runExtraUsage(ctx2);
-          return;
-        }
-        if (action === "off" || action === "disable" || action === "disabled") {
-          extraUsageSessionOverride = false;
-          ctx2.ui.notify("Claude bridge extra usage helper disabled for this Pi session.", "info");
-          return;
-        }
-        if (action === "status") {
-          showBridgeStatus(ctx2);
-          return;
-        }
-        await runExtraUsage(ctx2);
-        return;
-      }
+      if (args.trim()) ctx2.ui.notify("Unknown /claude-bridge argument. Use /claude-bridge:extra to run Claude Code /extra-usage.", "warning");
+      if (await tryOpenExtensionManagerSettings(ctx2)) return;
       showBridgeStatus(ctx2);
     }
   });
