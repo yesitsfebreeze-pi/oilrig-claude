@@ -38185,7 +38185,7 @@ function streamClaudeAgentSdk(model, context, options) {
     finalizeCurrentStream(ctx().turnOutput?.stopReason);
   }).catch((error51) => {
     debug(`provider: query error, model=${model.id}, aborted=${Boolean(options?.signal?.aborted)}, error=`, error51);
-    const suppressDuplicateError = ctx().handledTerminalError || !ctx().currentPiStream;
+    const suppressDuplicateError = ctx().handledTerminalError;
     const openedExtraUsage = !suppressDuplicateError && isExtraUsageRequiredMessage(error51) && launchExtraUsageHelperIfAllowed(cwd, bridgeConfig, "query error");
     if ((wasAborted || options?.signal?.aborted) && sharedSession) {
       sharedSession = { ...sharedSession, needsRebuild: true, forceRotate: true };
