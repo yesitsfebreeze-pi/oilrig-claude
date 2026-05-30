@@ -41,18 +41,21 @@ describe("loadConfig", () => {
 	it("maps extension-manager effort overrides into provider config", () => withTempDirs(({ user, project }) => {
 		writeFileSync(join(user, "settings.json"), JSON.stringify({
 			vstack: { extensionManager: { config: { "@vanillagreen/pi-claude-bridge": {
+				fastMode: false,
 				forceEffort: "high",
 				modelEffortOverrides: JSON.stringify({ "claude-opus-4-8": "xhigh", ignored: "bogus" }),
 			} } } },
 		}));
 		writeFileSync(join(project, ".pi", "settings.json"), JSON.stringify({
 			vstack: { extensionManager: { config: { "@vanillagreen/pi-claude-bridge": {
+				fastMode: true,
 				forceEffort: "max",
 				modelEffortOverrides: { "claude-bridge/claude-opus-4-8": "max", "claude-haiku-4-5": "low" },
 			} } } },
 		}));
 
 		const config = loadConfig(project);
+		assert.equal(config.provider?.fastMode, true);
 		assert.equal(config.provider?.forceEffort, "max");
 		assert.deepEqual(config.provider?.modelEffortOverrides, {
 			"claude-bridge/claude-opus-4-8": "max",

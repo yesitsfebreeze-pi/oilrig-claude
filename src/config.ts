@@ -19,6 +19,8 @@ export interface Config {
 	provider?: {
 		appendSystemPrompt?: boolean;
 		allowExtraUsage?: boolean;
+		/** Enable Claude Code fast mode for bridge requests. */
+		fastMode?: boolean;
 		/** Force this Claude Code effort level for every bridge request. */
 		forceEffort?: BridgeEffortLevel;
 		/** Per-model Claude Code effort overrides keyed by model id (e.g. claude-opus-4-8). */
@@ -169,6 +171,8 @@ function managerToConfig(raw: SettingsRecord): Partial<Config> {
 	if (appendSystemPrompt !== undefined) provider.appendSystemPrompt = appendSystemPrompt;
 	const allowExtraUsage = boolFrom(raw, "allowExtraUsage");
 	if (allowExtraUsage !== undefined) provider.allowExtraUsage = allowExtraUsage;
+	const fastMode = boolFrom(raw, "fastMode");
+	if (fastMode !== undefined) provider.fastMode = fastMode;
 	if (hasOwn(raw, "forceEffort")) {
 		provider.forceEffort = normalizeEffortLevel(raw.forceEffort);
 	}
