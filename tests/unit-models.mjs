@@ -12,6 +12,7 @@ import { MODEL_IDS_IN_ORDER, buildModels, resolveModelId } from "../src/models.j
 const mockPiAiModel = (id) => ({
 	id, name: id, reasoning: true, input: ["text"], cost: { input: 1, output: 1 },
 	contextWindow: 200000, maxTokens: 8000,
+	thinkingLevelMap: { xhigh: id === "claude-opus-4-8" ? "xhigh" : "max" },
 	// Leaky fields that should be stripped by the projection:
 	baseUrl: "https://api.anthropic.com", api: "anthropic", provider: "anthropic",
 	headers: { "x-api-key": "LEAK" },
@@ -44,6 +45,11 @@ describe("MODELS projection", () => {
 		for (const m of models) {
 			assert.deepEqual(m.cost, { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
 		}
+	});
+
+	it("preserves pi-ai thinkingLevelMap for per-model effort mapping", () => {
+		const models = buildModels(MODEL_IDS_IN_ORDER.map(mockPiAiModel));
+		assert.deepEqual(models.find((m) => m.id === "claude-opus-4-8")?.thinkingLevelMap, { xhigh: "xhigh" });
 	});
 });
 

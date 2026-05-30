@@ -22118,6 +22118,7 @@ import { existsSync as existsSync3, readFileSync as readFileSync4 } from "fs";
 import { homedir as homedir2 } from "os";
 import { dirname as dirname2, join as join2, resolve } from "path";
 var PACKAGE_ID = "@vanillagreen/pi-claude-bridge";
+var VALID_EFFORT_LEVELS = /* @__PURE__ */ new Set(["low", "medium", "high", "xhigh", "max"]);
 function expandHome(input) {
   if (input === "~") return homedir2();
   if (input.startsWith("~/")) return join2(homedir2(), input.slice(2));
@@ -22181,6 +22182,48 @@ function stringFrom(raw, key) {
   const value = raw[key];
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : void 0;
 }
+function hasOwn(raw, key) {
+  return Object.prototype.hasOwnProperty.call(raw, key);
+}
+function normalizeEffortLevel(value) {
+  if (typeof value !== "string") return void 0;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "" || normalized === "none" || normalized === "auto" || normalized === "default") return void 0;
+  return VALID_EFFORT_LEVELS.has(normalized) ? normalized : void 0;
+}
+function normalizeModelEffortOverrides(value) {
+  let source = value;
+  if (typeof source === "string") {
+    const trimmed = source.trim();
+    if (!trimmed || trimmed === "{}") return void 0;
+    try {
+      source = JSON.parse(trimmed);
+    } catch {
+      return void 0;
+    }
+  }
+  const record2 = asRecord(source);
+  if (!record2) return void 0;
+  const out = {};
+  for (const [modelId, rawEffort] of Object.entries(record2)) {
+    const key = modelId.trim();
+    const effort = normalizeEffortLevel(rawEffort);
+    if (key && effort) out[key] = effort;
+  }
+  return Object.keys(out).length > 0 ? out : void 0;
+}
+function normalizeProviderConfig(provider) {
+  if (!provider) return {};
+  const raw = provider;
+  const out = { ...provider };
+  const forceEffort = normalizeEffortLevel(raw.forceEffort);
+  if (forceEffort) out.forceEffort = forceEffort;
+  else delete out.forceEffort;
+  const modelEffortOverrides = normalizeModelEffortOverrides(raw.modelEffortOverrides);
+  if (modelEffortOverrides) out.modelEffortOverrides = modelEffortOverrides;
+  else delete out.modelEffortOverrides;
+  return out;
+}
 function managerToConfig(raw) {
   const provider = {};
   const promptContext = {};
@@ -22188,6 +22231,12 @@ function managerToConfig(raw) {
   if (appendSystemPrompt !== void 0) provider.appendSystemPrompt = appendSystemPrompt;
   const allowExtraUsage = boolFrom(raw, "allowExtraUsage");
   if (allowExtraUsage !== void 0) provider.allowExtraUsage = allowExtraUsage;
+  if (hasOwn(raw, "forceEffort")) {
+    provider.forceEffort = normalizeEffortLevel(raw.forceEffort);
+  }
+  if (hasOwn(raw, "modelEffortOverrides")) {
+    provider.modelEffortOverrides = normalizeModelEffortOverrides(raw.modelEffortOverrides);
+  }
   const strictMcpConfig = boolFrom(raw, "strictMcpConfig");
   if (strictMcpConfig !== void 0) provider.strictMcpConfig = strictMcpConfig;
   const claudePath = stringFrom(raw, "pathToClaudeCodeExecutable");
@@ -22210,9 +22259,10 @@ function loadConfig(cwd) {
   const global2 = tryParseJson(join2(piUserDir(), "claude-bridge.json"));
   const project = tryParseJson(join2(cwd, ".pi", "claude-bridge.json"));
   const manager = managerToConfig(readManagerConfig(cwd));
+  const provider = normalizeProviderConfig({ ...global2.provider, ...project.provider, ...manager.provider });
   return {
     enabled: manager.enabled ?? project.enabled ?? global2.enabled ?? true,
-    provider: { ...global2.provider, ...project.provider, ...manager.provider },
+    provider,
     promptContext: { ...global2.promptContext, ...project.promptContext, ...manager.promptContext }
   };
 }
@@ -37729,6 +37779,20 @@ var REASONING_TO_EFFORT = {
   high: "high",
   xhigh: "max"
 };
+function normalizeEffortOverrideModelKey(value) {
+  const key = value.trim().toLowerCase();
+  return key.startsWith(`${PROVIDER_ID}/`) ? key.slice(PROVIDER_ID.length + 1) : key;
+}
+function resolveConfiguredEffort(modelId, reasoningEffort, providerConfig) {
+  const target = normalizeEffortOverrideModelKey(modelId);
+  for (const [key, rawEffort] of Object.entries(providerConfig?.modelEffortOverrides ?? {})) {
+    const normalizedKey = normalizeEffortOverrideModelKey(key);
+    if (normalizedKey !== "*" && normalizedKey !== target) continue;
+    const effort = normalizeEffortLevel(rawEffort);
+    if (effort) return effort;
+  }
+  return normalizeEffortLevel(providerConfig?.forceEffort) ?? reasoningEffort;
+}
 function mapStopReason(reason) {
   switch (reason) {
     case "tool_use":
@@ -38072,7 +38136,8 @@ function streamClaudeAgentSdk(model, context, options) {
   const claudeExecutable = resolveClaudeExecutable(providerSettings.pathToClaudeCodeExecutable);
   const claudeExecutablePreflight = claudeExecutable ? preflightClaudeExecutable(claudeExecutable, cwd) : void 0;
   const { sessionId: resumeSessionId } = syncSharedSession(context.messages, cwd, customToolNameToSdk, model.id);
-  const effort = options?.reasoning ? model.thinkingLevelMap?.[options.reasoning] ?? REASONING_TO_EFFORT[options.reasoning] : void 0;
+  const requestedEffort = options?.reasoning ? model.thinkingLevelMap?.[options.reasoning] ?? REASONING_TO_EFFORT[options.reasoning] : void 0;
+  const effort = resolveConfiguredEffort(model.id, requestedEffort, providerSettings);
   const extraArgs = { model: model.id };
   if (strictMcpConfigEnabled) extraArgs["strict-mcp-config"] = null;
   if (effort) extraArgs["thinking-display"] = "summarized";
@@ -38344,6 +38409,7 @@ export {
   isExtraUsageRequiredMessage,
   mapToolName,
   preflightClaudeExecutable,
+  resolveConfiguredEffort,
   restoreSharedSessionFromPi,
   shouldRestorePersistedBridgeEntry,
   spawnClaudeCodeWithDiagnostics,

@@ -13,6 +13,7 @@ Forked from [`elidickinson/pi-claude-bridge`](https://github.com/elidickinson/pi
 - Pi tool calls run on Pi; Claude Code handles reasoning.
 - Session continuity across normal turns, `/compact`, tree navigation, and abort recovery.
 - Thinking-level forwarding with summarized Opus thinking display.
+- Optional Claude Code effort overrides, including `max` for Opus 4.8 when Pi's thinking ladder only exposes `xhigh`.
 - MCP isolation and Claude cloud-MCP suppression to keep tokens lean.
 - Opt-in forwarding of `APPEND_SYSTEM.md` and recognized Pi prompt hooks.
 
@@ -75,7 +76,17 @@ Open `/extensions:settings`; settings appear under the **Claude Bridge** tab.
 | --- | --- |
 | Strict MCP config | Block filesystem MCP auto-loads; Pi owns tools. |
 | Allow extra usage helper | Let the bridge launch Claude Code's `/extra-usage` flow when extra usage is required. Billing/admin approval still happens in Claude's browser page. |
+| Force Claude effort | Override Pi's thinking-level mapping for every claude-bridge request. `none` keeps Pi's selected level; `max` sends Claude Code `--effort max`. |
+| Model effort overrides | JSON object mapping model IDs to Claude Code efforts, e.g. `{"claude-opus-4-8":"max"}`. Per-model entries beat the global force setting. |
 | Claude executable path | Explicit `claude` binary path; empty auto-detects. |
+
+Pi does not have a native `max` thinking level. To use Claude Code `max` effort only for Opus 4.8 through the bridge, set **Model effort overrides** to:
+
+```json
+{"claude-opus-4-8":"max"}
+```
+
+Keys may be bare model IDs (`claude-opus-4-8`), `claude-bridge/<id>`, or `*` for all bridge models. Values are `low`, `medium`, `high`, `xhigh`, or `max`.
 
 ## Extra usage and rate limits
 

@@ -9,12 +9,20 @@ import { dirname, join, resolve } from "path";
 
 export const PACKAGE_ID = "@vanillagreen/pi-claude-bridge";
 
+export type BridgeEffortLevel = "low" | "medium" | "high" | "xhigh" | "max";
+
+const VALID_EFFORT_LEVELS = new Set<BridgeEffortLevel>(["low", "medium", "high", "xhigh", "max"]);
+
 export interface Config {
 	enabled?: boolean;
 	/** Low-level Claude Agent SDK plumbing. Most users won't need these. */
 	provider?: {
 		appendSystemPrompt?: boolean;
 		allowExtraUsage?: boolean;
+		/** Force this Claude Code effort level for every bridge request. */
+		forceEffort?: BridgeEffortLevel;
+		/** Per-model Claude Code effort overrides keyed by model id (e.g. claude-opus-4-8). */
+		modelEffortOverrides?: Record<string, BridgeEffortLevel>;
 		settingSources?: SettingSource[];
 		strictMcpConfig?: boolean;
 		pathToClaudeCodeExecutable?: string;
@@ -106,6 +114,53 @@ function stringFrom(raw: SettingsRecord, key: string): string | undefined {
 	return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
+function hasOwn(raw: SettingsRecord, key: string): boolean {
+	return Object.prototype.hasOwnProperty.call(raw, key);
+}
+
+export function normalizeEffortLevel(value: unknown): BridgeEffortLevel | undefined {
+	if (typeof value !== "string") return undefined;
+	const normalized = value.trim().toLowerCase();
+	if (normalized === "" || normalized === "none" || normalized === "auto" || normalized === "default") return undefined;
+	return VALID_EFFORT_LEVELS.has(normalized as BridgeEffortLevel) ? normalized as BridgeEffortLevel : undefined;
+}
+
+export function normalizeModelEffortOverrides(value: unknown): Record<string, BridgeEffortLevel> | undefined {
+	let source: unknown = value;
+	if (typeof source === "string") {
+		const trimmed = source.trim();
+		if (!trimmed || trimmed === "{}") return undefined;
+		try {
+			source = JSON.parse(trimmed);
+		} catch {
+			return undefined;
+		}
+	}
+	const record = asRecord(source);
+	if (!record) return undefined;
+
+	const out: Record<string, BridgeEffortLevel> = {};
+	for (const [modelId, rawEffort] of Object.entries(record)) {
+		const key = modelId.trim();
+		const effort = normalizeEffortLevel(rawEffort);
+		if (key && effort) out[key] = effort;
+	}
+	return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function normalizeProviderConfig(provider: Config["provider"] | undefined): Config["provider"] {
+	if (!provider) return {};
+	const raw = provider as SettingsRecord;
+	const out: Config["provider"] = { ...provider };
+	const forceEffort = normalizeEffortLevel(raw.forceEffort);
+	if (forceEffort) out.forceEffort = forceEffort;
+	else delete out.forceEffort;
+	const modelEffortOverrides = normalizeModelEffortOverrides(raw.modelEffortOverrides);
+	if (modelEffortOverrides) out.modelEffortOverrides = modelEffortOverrides;
+	else delete out.modelEffortOverrides;
+	return out;
+}
+
 function managerToConfig(raw: SettingsRecord): Partial<Config> {
 	const provider: Config["provider"] = {};
 	const promptContext: Config["promptContext"] = {};
@@ -114,6 +169,12 @@ function managerToConfig(raw: SettingsRecord): Partial<Config> {
 	if (appendSystemPrompt !== undefined) provider.appendSystemPrompt = appendSystemPrompt;
 	const allowExtraUsage = boolFrom(raw, "allowExtraUsage");
 	if (allowExtraUsage !== undefined) provider.allowExtraUsage = allowExtraUsage;
+	if (hasOwn(raw, "forceEffort")) {
+		provider.forceEffort = normalizeEffortLevel(raw.forceEffort);
+	}
+	if (hasOwn(raw, "modelEffortOverrides")) {
+		provider.modelEffortOverrides = normalizeModelEffortOverrides(raw.modelEffortOverrides);
+	}
 	const strictMcpConfig = boolFrom(raw, "strictMcpConfig");
 	if (strictMcpConfig !== undefined) provider.strictMcpConfig = strictMcpConfig;
 	const claudePath = stringFrom(raw, "pathToClaudeCodeExecutable");
@@ -139,9 +200,10 @@ export function loadConfig(cwd: string): Config {
 	const global = tryParseJson(join(piUserDir(), "claude-bridge.json"));
 	const project = tryParseJson(join(cwd, ".pi", "claude-bridge.json"));
 	const manager = managerToConfig(readManagerConfig(cwd));
+	const provider = normalizeProviderConfig({ ...global.provider, ...project.provider, ...manager.provider });
 	return {
 		enabled: manager.enabled ?? project.enabled ?? global.enabled ?? true,
-		provider: { ...global.provider, ...project.provider, ...manager.provider },
+		provider,
 		promptContext: { ...global.promptContext, ...project.promptContext, ...manager.promptContext },
 	};
 }

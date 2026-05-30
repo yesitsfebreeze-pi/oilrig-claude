@@ -16,7 +16,7 @@ import { MCP_SERVER_NAME, MCP_TOOL_PREFIX, extractSkillsBlock } from "./skills.j
 import { verifyWrittenSession as _verifyWrittenSession } from "./session-verify.js";
 import { extractAllToolResults as _extractAllToolResults, type McpResult } from "./extract-tool-results.js";
 import { QueryContext, ctx, stackDepth, pushContext, popContext } from "./query-state.js";
-import { loadConfig, type Config } from "./config.js";
+import { loadConfig, normalizeEffortLevel, type Config } from "./config.js";
 import { extractAgentsAppend } from "./agents-md.js";
 import { buildPromptContextAppend } from "./prompt-context.js";
 import { jsonSchemaToZodShape } from "./typebox-to-zod.js";
@@ -1041,6 +1041,26 @@ const REASONING_TO_EFFORT: Record<string, EffortLevel> = {
 	minimal: "low", low: "low", medium: "medium", high: "high", xhigh: "max",
 };
 
+function normalizeEffortOverrideModelKey(value: string): string {
+	const key = value.trim().toLowerCase();
+	return key.startsWith(`${PROVIDER_ID}/`) ? key.slice(PROVIDER_ID.length + 1) : key;
+}
+
+export function resolveConfiguredEffort(
+	modelId: string,
+	reasoningEffort: EffortLevel | undefined,
+	providerConfig?: Config["provider"],
+): EffortLevel | undefined {
+	const target = normalizeEffortOverrideModelKey(modelId);
+	for (const [key, rawEffort] of Object.entries(providerConfig?.modelEffortOverrides ?? {})) {
+		const normalizedKey = normalizeEffortOverrideModelKey(key);
+		if (normalizedKey !== "*" && normalizedKey !== target) continue;
+		const effort = normalizeEffortLevel(rawEffort) as EffortLevel | undefined;
+		if (effort) return effort;
+	}
+	return (normalizeEffortLevel(providerConfig?.forceEffort) as EffortLevel | undefined) ?? reasoningEffort;
+}
+
 // --- Provider helpers: misc ---
 
 function mapStopReason(reason: string | undefined): "stop" | "length" | "toolUse" {
@@ -1490,10 +1510,11 @@ function streamClaudeAgentSdk(model: Model<any>, context: Context, options?: Sim
 	// Prefer the model's own thinkingLevelMap when present (pi-ai 0.72+ ships
 	// per-model overrides — e.g. opus-4-7 wants xhigh→xhigh, not xhigh→max).
 	// Fall back to our generic table for older pi-ai or unmapped levels.
-	const effort = options?.reasoning
+	const requestedEffort = options?.reasoning
 		? ((model as any).thinkingLevelMap?.[options.reasoning] as EffortLevel | undefined)
 			?? REASONING_TO_EFFORT[options.reasoning]
 		: undefined;
+	const effort = resolveConfiguredEffort(model.id, requestedEffort, providerSettings);
 
 	const extraArgs: Record<string, string | null> = { model: model.id };
 	if (strictMcpConfigEnabled) extraArgs["strict-mcp-config"] = null;
