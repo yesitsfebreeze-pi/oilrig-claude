@@ -37873,6 +37873,90 @@ var piUI;
 var extraUsageHelperInFlight = null;
 var RATE_LIMIT_AUTO_RESUME_EVENT = "vstack:rate-limit";
 var RATE_LIMIT_TOKEN = "\x1B[31m[rate-limit]\x1B[39m";
+var DEFAULT_STREAM_IDLE_TIMEOUT_MS = 9e4;
+var STREAM_IDLE_BACKOFF_HINT_MS = 6e4;
+var STREAM_IDLE_TIMEOUT_ENV = "CLAUDE_BRIDGE_STREAM_IDLE_TIMEOUT";
+var activeStreamIdleWatchdogs = /* @__PURE__ */ new WeakMap();
+function parseDurationLiteralMs(value, defaultUnit = "s") {
+  const text = value.trim().toLowerCase();
+  if (!text) return void 0;
+  if (["off", "false", "disabled", "disable"].includes(text)) return 0;
+  const match = text.match(/^(\d+(?:\.\d+)?)\s*(ms|msec|msecs|milliseconds?|s|sec|secs|seconds?|m|min|mins|minutes?)?$/i);
+  if (!match) return void 0;
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount) || amount < 0) return void 0;
+  const unit = (match[2] ?? defaultUnit).toLowerCase();
+  const multiplier = ["ms", "msec", "msecs", "millisecond", "milliseconds"].includes(unit) ? 1 : ["s", "sec", "secs", "second", "seconds"].includes(unit) ? 1e3 : ["m", "min", "mins", "minute", "minutes"].includes(unit) ? 6e4 : void 0;
+  if (multiplier === void 0) return void 0;
+  const ms = Math.round(amount * multiplier);
+  return Number.isFinite(ms) ? ms : void 0;
+}
+function streamIdleTimeoutMsFromEnv(env = process.env) {
+  const raw = env[STREAM_IDLE_TIMEOUT_ENV]?.trim();
+  if (!raw) return DEFAULT_STREAM_IDLE_TIMEOUT_MS;
+  return parseDurationLiteralMs(raw, "s") ?? DEFAULT_STREAM_IDLE_TIMEOUT_MS;
+}
+function formatDurationShort(ms) {
+  if (ms < 18e4 && ms % 1e3 === 0) return `${ms / 1e3}s`;
+  if (ms % 6e4 === 0) return `${ms / 6e4}m`;
+  if (ms % 1e3 === 0) return `${ms / 1e3}s`;
+  return `${ms}ms`;
+}
+function buildStreamIdleTimeoutErrorMessage(timeoutMs) {
+  return `Claude Code stream idle timeout after ${formatDurationShort(timeoutMs)} with no assistant/tool output; treating stalled stream as retryable 529 overloaded/rate limit condition. Retry after ${formatDurationShort(STREAM_IDLE_BACKOFF_HINT_MS)}.`;
+}
+function createStreamIdleWatchdog({
+  clearTimer = (timer) => clearTimeout(timer),
+  getState,
+  now = () => Date.now(),
+  onTimeout,
+  setTimer = (fn, delayMs) => setTimeout(fn, delayMs),
+  timeoutMs
+}) {
+  let disposed = false;
+  let lastChunkAt = now();
+  let timer = null;
+  let didTimeout = false;
+  const clear = () => {
+    if (!timer) return;
+    try {
+      clearTimer(timer);
+    } catch {
+    }
+    timer = null;
+  };
+  const shouldMonitor = (state) => Boolean(
+    timeoutMs > 0 && state.activeQuery && state.currentPiStream && state.turnOutput && !state.turnStarted && !state.turnSawStreamEvent
+  );
+  const schedule = () => {
+    clear();
+    if (disposed || didTimeout || timeoutMs <= 0) return;
+    const state = getState();
+    if (!shouldMonitor(state)) return;
+    const turnStartedAt = typeof state.turnOutput?.timestamp === "number" ? state.turnOutput.timestamp : 0;
+    const idleStartedAt = Math.max(lastChunkAt, turnStartedAt);
+    const idleMs = Math.max(0, now() - idleStartedAt);
+    if (idleMs >= timeoutMs) {
+      didTimeout = true;
+      onTimeout({ idleMs, timeoutMs });
+      return;
+    }
+    timer = setTimer(schedule, Math.max(1, timeoutMs - idleMs));
+    timer.unref?.();
+  };
+  return {
+    dispose: () => {
+      disposed = true;
+      clear();
+    },
+    noteChunk: () => {
+      lastChunkAt = now();
+      schedule();
+    },
+    refresh: schedule,
+    timedOut: () => didTimeout
+  };
+}
 function isExtraUsageRequiredMessage(value) {
   let text;
   if (typeof value === "string") text = value;
@@ -38639,6 +38723,7 @@ async function consumeQuery(sdkQuery, customToolNameToPi, model, cwd, bridgeConf
   for await (const message of sdkQuery) {
     if (wasAborted()) break;
     const queryCtx = ctx();
+    activeStreamIdleWatchdogs.get(queryCtx)?.noteChunk();
     if (!queryCtx.turnOutput) continue;
     if (!queryCtx.currentPiStream && !(message.type === "assistant" && queryCtx.turnSawToolCall)) continue;
     switch (message.type) {
@@ -38720,6 +38805,7 @@ function streamClaudeAgentSdk(model, context, options) {
     const queryCtx = ctx();
     queryCtx.currentPiStream = stream;
     queryCtx.resetTurnState(model);
+    activeStreamIdleWatchdogs.get(queryCtx)?.refresh();
     const allResults = extractAllToolResults2(context);
     debug(`provider: tool results, ${allResults.length} results, ${queryCtx.pendingToolCalls.size} waiting handlers, ctx.msgs=${context.messages.length}`);
     const unmatchedResultIds = [];
@@ -38859,6 +38945,7 @@ function streamClaudeAgentSdk(model, context, options) {
     `prompt=${promptText.slice(0, 60)}${promptBlocks ? " [+images]" : ""}`
   );
   let wasAborted = false;
+  let streamIdleTimedOut = false;
   const sdkQuery = jA$({ prompt, options: queryOptions });
   ctx().activeQuery = sdkQuery;
   const abortCtx = ctx();
@@ -38870,6 +38957,55 @@ function streamClaudeAgentSdk(model, context, options) {
     } catch {
     }
   };
+  const streamIdleTimeoutMs = streamIdleTimeoutMsFromEnv();
+  const streamIdleWatchdog = streamIdleTimeoutMs > 0 ? createStreamIdleWatchdog({
+    getState: () => ({
+      activeQuery: abortCtx.activeQuery,
+      currentPiStream: abortCtx.currentPiStream,
+      turnOutput: abortCtx.turnOutput,
+      turnSawStreamEvent: abortCtx.turnSawStreamEvent,
+      turnStarted: abortCtx.turnStarted
+    }),
+    onTimeout: ({ idleMs, timeoutMs }) => {
+      if (streamIdleTimedOut || wasAborted || options?.signal?.aborted || abortCtx.activeQuery !== sdkQuery) return;
+      streamIdleTimedOut = true;
+      abortCtx.deferredUserMessages = [];
+      abortCtx.handledTerminalError = true;
+      if (sharedSession) sharedSession = { ...sharedSession, needsRebuild: true, forceRotate: true };
+      const errorMessage = buildStreamIdleTimeoutErrorMessage(timeoutMs);
+      debug("provider: stream idle timeout", `model=${model.id}`, `timeout=${timeoutMs}`, `idle=${idleMs}`);
+      emitRateLimitEvent({
+        idleMs,
+        model: model.id,
+        provider: PROVIDER_ID,
+        rateLimitType: "stream_idle",
+        reason: "Claude Code stream idle timeout",
+        retryAfterMs: STREAM_IDLE_BACKOFF_HINT_MS,
+        source: "claude-bridge",
+        status: "rejected",
+        timeoutMs
+      });
+      piUI?.notify(`${RATE_LIMIT_TOKEN} Claude stream idle timeout after ${formatDurationShort(timeoutMs)} \u2014 retrying via rate-limit backoff`, "warning");
+      if (abortCtx.turnOutput) {
+        abortCtx.turnOutput.stopReason = "error";
+        abortCtx.turnOutput.errorMessage = errorMessage;
+        Object.assign(abortCtx.turnOutput, {
+          rateLimitType: "stream_idle",
+          retryAfterMs: STREAM_IDLE_BACKOFF_HINT_MS,
+          streamIdleTimeoutMs: timeoutMs
+        });
+      }
+      abortCtx.currentPiStream?.push({ type: "error", reason: "error", error: abortCtx.turnOutput });
+      abortCtx.currentPiStream?.end();
+      abortCtx.currentPiStream = null;
+      requestAbort();
+    },
+    timeoutMs: streamIdleTimeoutMs
+  }) : null;
+  if (streamIdleWatchdog) {
+    activeStreamIdleWatchdogs.set(abortCtx, streamIdleWatchdog);
+    streamIdleWatchdog.refresh();
+  }
   const onAbort = () => {
     wasAborted = true;
     abortCtx.deferredUserMessages = [];
@@ -38887,6 +39023,11 @@ function streamClaudeAgentSdk(model, context, options) {
   }
   consumeQuery(sdkQuery, customToolNameToPi, model, cwd, bridgeConfig, () => wasAborted).then(async ({ capturedSessionId }) => {
     debug(`provider: consumeQuery completed, stopReason=${ctx().turnOutput?.stopReason}, error=${ctx().turnOutput?.errorMessage}, aborted=${wasAborted}`);
+    if (streamIdleTimedOut) {
+      abortCtx.deferredUserMessages = [];
+      debug("provider: stream idle timeout already surfaced; skipping normal completion");
+      return;
+    }
     if (wasAborted || options?.signal?.aborted) {
       if (sharedSession) sharedSession = { ...sharedSession, needsRebuild: true, forceRotate: true };
       ctx().deferredUserMessages = [];
@@ -38940,7 +39081,7 @@ function streamClaudeAgentSdk(model, context, options) {
     finalizeCurrentStream(ctx().turnOutput?.stopReason);
   }).catch((error51) => {
     debug(`provider: query error, model=${model.id}, aborted=${Boolean(options?.signal?.aborted)}, error=`, error51);
-    const suppressDuplicateError = ctx().handledTerminalError;
+    const suppressDuplicateError = ctx().handledTerminalError || streamIdleTimedOut;
     const openedExtraUsage = !suppressDuplicateError && isExtraUsageRequiredMessage(error51) && launchExtraUsageHelperIfAllowed(cwd, bridgeConfig, "query error");
     if ((wasAborted || options?.signal?.aborted) && sharedSession) {
       sharedSession = { ...sharedSession, needsRebuild: true, forceRotate: true };
@@ -38960,9 +39101,11 @@ function streamClaudeAgentSdk(model, context, options) {
     ctx().currentPiStream?.end();
     ctx().currentPiStream = null;
   }).finally(() => {
+    streamIdleWatchdog?.dispose();
+    activeStreamIdleWatchdogs.delete(abortCtx);
     if (options?.signal) options.signal.removeEventListener("abort", onAbort);
     if (ctx().activeQuery === sdkQuery) {
-      reportToolResultMismatch(ctx(), "query teardown", cwd, { forceRotate: wasAborted || options?.signal?.aborted });
+      reportToolResultMismatch(ctx(), "query teardown", cwd, { forceRotate: wasAborted || options?.signal?.aborted || streamIdleTimedOut });
       for (const pending of ctx().pendingToolCalls.values()) {
         pending.resolve({ content: [{ type: "text", text: "Query ended" }] });
       }
@@ -39097,10 +39240,15 @@ function index_default(pi) {
 export {
   ALLOWED_RATE_LIMIT_WARNING_UTILIZATION_THRESHOLD,
   CLAUDE_BRIDGE_TOOL_ISOLATION,
+  DEFAULT_STREAM_IDLE_TIMEOUT_MS,
   DISALLOWED_BUILTIN_TOOLS,
+  STREAM_IDLE_BACKOFF_HINT_MS,
+  STREAM_IDLE_TIMEOUT_ENV,
   __testGetBridgeIntegrityState,
   __testSetBridgeIntegrityState,
+  buildStreamIdleTimeoutErrorMessage,
   classifyClaudeExecutableBytes,
+  createStreamIdleWatchdog,
   index_default as default,
   formatAllowedRateLimitWarning,
   formatResetTimestamp,
@@ -39115,6 +39263,7 @@ export {
   restoreSharedSessionFromPi,
   shouldRestorePersistedBridgeEntry,
   spawnClaudeCodeWithDiagnostics,
+  streamIdleTimeoutMsFromEnv,
   uniqueNonEmptyLines,
   wrapClaudeSpawnErrorForSdk
 };

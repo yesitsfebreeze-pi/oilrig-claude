@@ -98,6 +98,8 @@ When Claude Code emits rate-limit reset metadata, the bridge shows one red ASCII
 
 Allowed-warning rate-limit events are filtered before user notification. The bridge normalizes unambiguous numeric utilization (`0 < value < 1` as fractional, `1 < value <= 100` as percent), suppresses low or unit-ambiguous values such as exact `1`, and only shows a neutral warning at 80%+ instead of claiming an unverified `% used` value. Check Claude Code `/usage` for exact allowed-warning utilization.
 
+If Claude Code accepts a turn but produces no assistant/tool output, the bridge treats that stream-idle stall as a retryable overload/rate-limit failure: it closes the stalled Claude Code subprocess, emits a normal assistant error with a backoff hint, and lets Flightdeck or `pi-agents-tmux` reuse their existing rate-limit retry ladder. Tune the first-output timeout with `CLAUDE_BRIDGE_STREAM_IDLE_TIMEOUT` (bare numbers are seconds; suffixes `ms`, `s`, and `m` are accepted). Default: `90s`; set `0` to disable.
+
 ## Debugging
 
 Set `CLAUDE_BRIDGE_DEBUG=1` to write bridge logs to `~/.pi/agent/claude-bridge.log` and per-query Claude Code CLI logs under `~/.pi/agent/cc-cli-logs/`.

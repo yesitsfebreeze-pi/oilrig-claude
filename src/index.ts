@@ -532,6 +532,137 @@ let extraUsageHelperInFlight: Promise<string> | null = null;
 
 const RATE_LIMIT_AUTO_RESUME_EVENT = "vstack:rate-limit";
 const RATE_LIMIT_TOKEN = "\x1b[31m[rate-limit]\x1b[39m";
+export const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 90_000;
+export const STREAM_IDLE_BACKOFF_HINT_MS = 60_000;
+export const STREAM_IDLE_TIMEOUT_ENV = "CLAUDE_BRIDGE_STREAM_IDLE_TIMEOUT";
+
+type TimerHandle = ReturnType<typeof setTimeout>;
+
+export interface StreamIdleWatchdogState {
+	activeQuery: unknown | null;
+	currentPiStream: AssistantMessageEventStream | null;
+	turnOutput: AssistantMessage | null;
+	turnSawStreamEvent: boolean;
+	turnStarted: boolean;
+}
+
+export interface StreamIdleTimeoutInfo {
+	idleMs: number;
+	timeoutMs: number;
+}
+
+export interface StreamIdleWatchdog {
+	dispose: () => void;
+	noteChunk: () => void;
+	refresh: () => void;
+	timedOut: () => boolean;
+}
+
+const activeStreamIdleWatchdogs = new WeakMap<QueryContext, StreamIdleWatchdog>();
+
+function parseDurationLiteralMs(value: string, defaultUnit: "ms" | "s" = "s"): number | undefined {
+	const text = value.trim().toLowerCase();
+	if (!text) return undefined;
+	if (["off", "false", "disabled", "disable"].includes(text)) return 0;
+	const match = text.match(/^(\d+(?:\.\d+)?)\s*(ms|msec|msecs|milliseconds?|s|sec|secs|seconds?|m|min|mins|minutes?)?$/i);
+	if (!match) return undefined;
+	const amount = Number(match[1]);
+	if (!Number.isFinite(amount) || amount < 0) return undefined;
+	const unit = (match[2] ?? defaultUnit).toLowerCase();
+	const multiplier = ["ms", "msec", "msecs", "millisecond", "milliseconds"].includes(unit)
+		? 1
+		: ["s", "sec", "secs", "second", "seconds"].includes(unit)
+			? 1000
+			: ["m", "min", "mins", "minute", "minutes"].includes(unit)
+				? 60_000
+				: undefined;
+	if (multiplier === undefined) return undefined;
+	const ms = Math.round(amount * multiplier);
+	return Number.isFinite(ms) ? ms : undefined;
+}
+
+export function streamIdleTimeoutMsFromEnv(env: NodeJS.ProcessEnv = process.env): number {
+	const raw = env[STREAM_IDLE_TIMEOUT_ENV]?.trim();
+	if (!raw) return DEFAULT_STREAM_IDLE_TIMEOUT_MS;
+	return parseDurationLiteralMs(raw, "s") ?? DEFAULT_STREAM_IDLE_TIMEOUT_MS;
+}
+
+function formatDurationShort(ms: number): string {
+	if (ms < 180_000 && ms % 1000 === 0) return `${ms / 1000}s`;
+	if (ms % 60_000 === 0) return `${ms / 60_000}m`;
+	if (ms % 1000 === 0) return `${ms / 1000}s`;
+	return `${ms}ms`;
+}
+
+export function buildStreamIdleTimeoutErrorMessage(timeoutMs: number): string {
+	return `Claude Code stream idle timeout after ${formatDurationShort(timeoutMs)} with no assistant/tool output; treating stalled stream as retryable 529 overloaded/rate limit condition. Retry after ${formatDurationShort(STREAM_IDLE_BACKOFF_HINT_MS)}.`;
+}
+
+export function createStreamIdleWatchdog({
+	clearTimer = (timer: TimerHandle) => clearTimeout(timer),
+	getState,
+	now = () => Date.now(),
+	onTimeout,
+	setTimer = (fn: () => void, delayMs: number) => setTimeout(fn, delayMs),
+	timeoutMs,
+}: {
+	clearTimer?: (timer: TimerHandle) => void;
+	getState: () => StreamIdleWatchdogState;
+	now?: () => number;
+	onTimeout: (info: StreamIdleTimeoutInfo) => void;
+	setTimer?: (fn: () => void, delayMs: number) => TimerHandle;
+	timeoutMs: number;
+}): StreamIdleWatchdog {
+	let disposed = false;
+	let lastChunkAt = now();
+	let timer: TimerHandle | null = null;
+	let didTimeout = false;
+
+	const clear = () => {
+		if (!timer) return;
+		try { clearTimer(timer); } catch { /* best effort */ }
+		timer = null;
+	};
+
+	const shouldMonitor = (state: StreamIdleWatchdogState): boolean => Boolean(
+		timeoutMs > 0
+		&& state.activeQuery
+		&& state.currentPiStream
+		&& state.turnOutput
+		&& !state.turnStarted
+		&& !state.turnSawStreamEvent,
+	);
+
+	const schedule = () => {
+		clear();
+		if (disposed || didTimeout || timeoutMs <= 0) return;
+		const state = getState();
+		if (!shouldMonitor(state)) return;
+		const turnStartedAt = typeof state.turnOutput?.timestamp === "number" ? state.turnOutput.timestamp : 0;
+		const idleStartedAt = Math.max(lastChunkAt, turnStartedAt);
+		const idleMs = Math.max(0, now() - idleStartedAt);
+		if (idleMs >= timeoutMs) {
+			didTimeout = true;
+			onTimeout({ idleMs, timeoutMs });
+			return;
+		}
+		timer = setTimer(schedule, Math.max(1, timeoutMs - idleMs));
+		(timer as { unref?: () => void }).unref?.();
+	};
+
+	return {
+		dispose: () => {
+			disposed = true;
+			clear();
+		},
+		noteChunk: () => {
+			lastChunkAt = now();
+			schedule();
+		},
+		refresh: schedule,
+		timedOut: () => didTimeout,
+	};
+}
 
 export function isExtraUsageRequiredMessage(value: unknown): boolean {
 	let text: string;
@@ -1532,6 +1663,7 @@ async function consumeQuery(
 	for await (const message of sdkQuery) {
 		if (wasAborted()) break;
 		const queryCtx = ctx();
+		activeStreamIdleWatchdogs.get(queryCtx)?.noteChunk();
 		if (!queryCtx.turnOutput) continue;
 		if (!queryCtx.currentPiStream && !(message.type === "assistant" && queryCtx.turnSawToolCall)) continue;
 
@@ -1626,6 +1758,7 @@ function streamClaudeAgentSdk(model: Model<any>, context: Context, options?: Sim
 		const queryCtx = ctx();
 		queryCtx.currentPiStream = stream;
 		queryCtx.resetTurnState(model);
+		activeStreamIdleWatchdogs.get(queryCtx)?.refresh();
 		const allResults = extractAllToolResults(context);
 		debug(`provider: tool results, ${allResults.length} results, ${queryCtx.pendingToolCalls.size} waiting handlers, ctx.msgs=${context.messages.length}`);
 		const unmatchedResultIds: string[] = [];
@@ -1822,6 +1955,7 @@ function streamClaudeAgentSdk(model: Model<any>, context: Context, options?: Sim
 
 	// 3. Start SDK query and claim it for this context
 	let wasAborted = false;
+	let streamIdleTimedOut = false;
 	const sdkQuery = query({ prompt, options: queryOptions });
 	ctx().activeQuery = sdkQuery;
 
@@ -1834,6 +1968,57 @@ function streamClaudeAgentSdk(model: Model<any>, context: Context, options?: Sim
 		void sdkQuery.interrupt().catch(() => {});
 		try { sdkQuery.close(); } catch {}
 	};
+	const streamIdleTimeoutMs = streamIdleTimeoutMsFromEnv();
+	const streamIdleWatchdog = streamIdleTimeoutMs > 0
+		? createStreamIdleWatchdog({
+			getState: () => ({
+				activeQuery: abortCtx.activeQuery,
+				currentPiStream: abortCtx.currentPiStream,
+				turnOutput: abortCtx.turnOutput,
+				turnSawStreamEvent: abortCtx.turnSawStreamEvent,
+				turnStarted: abortCtx.turnStarted,
+			}),
+			onTimeout: ({ idleMs, timeoutMs }) => {
+				if (streamIdleTimedOut || wasAborted || options?.signal?.aborted || abortCtx.activeQuery !== sdkQuery) return;
+				streamIdleTimedOut = true;
+				abortCtx.deferredUserMessages = [];
+				abortCtx.handledTerminalError = true;
+				if (sharedSession) sharedSession = { ...sharedSession, needsRebuild: true, forceRotate: true };
+				const errorMessage = buildStreamIdleTimeoutErrorMessage(timeoutMs);
+				debug("provider: stream idle timeout", `model=${model.id}`, `timeout=${timeoutMs}`, `idle=${idleMs}`);
+				emitRateLimitEvent({
+					idleMs,
+					model: model.id,
+					provider: PROVIDER_ID,
+					rateLimitType: "stream_idle",
+					reason: "Claude Code stream idle timeout",
+					retryAfterMs: STREAM_IDLE_BACKOFF_HINT_MS,
+					source: "claude-bridge",
+					status: "rejected",
+					timeoutMs,
+				});
+				piUI?.notify(`${RATE_LIMIT_TOKEN} Claude stream idle timeout after ${formatDurationShort(timeoutMs)} — retrying via rate-limit backoff`, "warning");
+				if (abortCtx.turnOutput) {
+					abortCtx.turnOutput.stopReason = "error";
+					abortCtx.turnOutput.errorMessage = errorMessage;
+					Object.assign(abortCtx.turnOutput as AssistantMessage & Record<string, unknown>, {
+						rateLimitType: "stream_idle",
+						retryAfterMs: STREAM_IDLE_BACKOFF_HINT_MS,
+						streamIdleTimeoutMs: timeoutMs,
+					});
+				}
+				abortCtx.currentPiStream?.push({ type: "error", reason: "error", error: abortCtx.turnOutput! });
+				abortCtx.currentPiStream?.end();
+				abortCtx.currentPiStream = null;
+				requestAbort();
+			},
+			timeoutMs: streamIdleTimeoutMs,
+		})
+		: null;
+	if (streamIdleWatchdog) {
+		activeStreamIdleWatchdogs.set(abortCtx, streamIdleWatchdog);
+		streamIdleWatchdog.refresh();
+	}
 	const onAbort = () => {
 		wasAborted = true;
 		// Prevent stale deferred messages from being replayed by parent on pop
@@ -1853,6 +2038,11 @@ function streamClaudeAgentSdk(model: Model<any>, context: Context, options?: Sim
 	consumeQuery(sdkQuery, customToolNameToPi, model, cwd, bridgeConfig, () => wasAborted)
 		.then(async ({ capturedSessionId }) => {
 			debug(`provider: consumeQuery completed, stopReason=${ctx().turnOutput?.stopReason}, error=${ctx().turnOutput?.errorMessage}, aborted=${wasAborted}`);
+			if (streamIdleTimedOut) {
+				abortCtx.deferredUserMessages = [];
+				debug("provider: stream idle timeout already surfaced; skipping normal completion");
+				return;
+			}
 
 			// --- Abort detection in normal completion path ---
 			if (wasAborted || options?.signal?.aborted) {
@@ -1921,7 +2111,7 @@ function streamClaudeAgentSdk(model: Model<any>, context: Context, options?: Sim
 		})
 		.catch((error) => {
 			debug(`provider: query error, model=${model.id}, aborted=${Boolean(options?.signal?.aborted)}, error=`, error);
-			const suppressDuplicateError = ctx().handledTerminalError;
+			const suppressDuplicateError = ctx().handledTerminalError || streamIdleTimedOut;
 			const openedExtraUsage = !suppressDuplicateError && isExtraUsageRequiredMessage(error) && launchExtraUsageHelperIfAllowed(cwd, bridgeConfig, "query error");
 			if ((wasAborted || options?.signal?.aborted) && sharedSession) {
 				sharedSession = { ...sharedSession, needsRebuild: true, forceRotate: true };
@@ -1942,9 +2132,11 @@ function streamClaudeAgentSdk(model: Model<any>, context: Context, options?: Sim
 			ctx().currentPiStream = null;
 		})
 		.finally(() => {
+			streamIdleWatchdog?.dispose();
+			activeStreamIdleWatchdogs.delete(abortCtx);
 			if (options?.signal) options.signal.removeEventListener("abort", onAbort);
 			if (ctx().activeQuery === sdkQuery) {
-				reportToolResultMismatch(ctx(), "query teardown", cwd, { forceRotate: wasAborted || options?.signal?.aborted });
+				reportToolResultMismatch(ctx(), "query teardown", cwd, { forceRotate: wasAborted || options?.signal?.aborted || streamIdleTimedOut });
 				// Drain pending handlers for this query
 				for (const pending of ctx().pendingToolCalls.values()) { pending.resolve({ content: [{ type: "text", text: "Query ended" }] }); }
 				ctx().pendingToolCalls.clear();
