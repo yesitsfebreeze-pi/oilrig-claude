@@ -21976,7 +21976,7 @@ function readSession(jsonlPath, projectPath) {
 // src/index.ts
 import { spawn as spawnProcess } from "child_process";
 import { createHash } from "crypto";
-import { accessSync, appendFileSync as appendFileSync3, chmodSync, constants as fsConstants, mkdirSync as mkdirSync3, readFileSync as readFileSync7, realpathSync as realpathSync3, statSync as statSync3 } from "fs";
+import { accessSync, appendFileSync as appendFileSync3, chmodSync, constants as fsConstants, mkdirSync as mkdirSync3, readFileSync as readFileSync6, realpathSync as realpathSync3, statSync as statSync3 } from "fs";
 import { resolve as pathResolve } from "path";
 import { homedir as homedir5 } from "os";
 import { delimiter, dirname as dirname5, join as join5 } from "path";
@@ -22272,7 +22272,46 @@ function rewriteSkillsBlock(skillsBlock) {
 }
 
 // src/session-verify.ts
-import { statSync as statSync2, readFileSync as readFileSync3 } from "fs";
+import { closeSync as closeSync2, openSync as openSync2, readSync as readSync2, statSync as statSync2 } from "fs";
+import { StringDecoder } from "node:string_decoder";
+function forEachJsonlLine(path, onLine) {
+  const fd = openSync2(path, "r");
+  const buffer = Buffer.allocUnsafe(64 * 1024);
+  const decoder = new StringDecoder("utf8");
+  let pending = "";
+  try {
+    for (; ; ) {
+      const bytesRead = readSync2(fd, buffer, 0, buffer.length, null);
+      if (bytesRead === 0) break;
+      pending += decoder.write(buffer.subarray(0, bytesRead));
+      let start = 0;
+      for (; ; ) {
+        const newline = pending.indexOf("\n", start);
+        if (newline < 0) {
+          pending = pending.slice(start);
+          break;
+        }
+        const line = pending.slice(start, newline);
+        onLine(line.endsWith("\r") ? line.slice(0, -1) : line);
+        start = newline + 1;
+      }
+    }
+    pending += decoder.end();
+    if (pending.length > 0) onLine(pending.endsWith("\r") ? pending.slice(0, -1) : pending);
+  } finally {
+    closeSync2(fd);
+  }
+}
+function summarizeJsonl(path) {
+  const summary = { count: 0 };
+  forEachJsonlLine(path, (line) => {
+    if (!line.trim()) return;
+    summary.count += 1;
+    if (summary.firstLine === void 0) summary.firstLine = line;
+    summary.lastLine = line;
+  });
+  return summary;
+}
 function verifyWrittenSession(jsonlPath, expectedSessionId, expectedRecordCount) {
   const warnings = [];
   let st;
@@ -22282,21 +22321,20 @@ function verifyWrittenSession(jsonlPath, expectedSessionId, expectedRecordCount)
     warnings.push(`file missing after save \u2014 path=${jsonlPath} err=${e2.message}`);
     return warnings;
   }
-  let content;
+  let summary;
   try {
-    content = readFileSync3(jsonlPath, "utf8");
+    summary = summarizeJsonl(jsonlPath);
   } catch (e2) {
     warnings.push(`file unreadable \u2014 path=${jsonlPath} size=${st.size} err=${e2.message}`);
     return warnings;
   }
-  const lines = content.split("\n").filter((l2) => l2.trim().length > 0);
-  if (lines.length !== expectedRecordCount) {
-    warnings.push(`record count mismatch \u2014 expected=${expectedRecordCount} actual=${lines.length} path=${jsonlPath} bytes=${content.length}`);
+  if (summary.count !== expectedRecordCount) {
+    warnings.push(`record count mismatch \u2014 expected=${expectedRecordCount} actual=${summary.count} path=${jsonlPath} bytes=${st.size}`);
     return warnings;
   }
   try {
-    const firstRec = JSON.parse(lines[0]);
-    const lastRec = JSON.parse(lines[lines.length - 1]);
+    const firstRec = JSON.parse(summary.firstLine ?? "");
+    const lastRec = JSON.parse(summary.lastLine ?? "");
     if (firstRec.sessionId !== expectedSessionId || lastRec.sessionId !== expectedSessionId) {
       warnings.push(`sessionId drift \u2014 expected=${expectedSessionId} first=${firstRec.sessionId} last=${lastRec.sessionId}`);
     }
@@ -22564,7 +22602,7 @@ function summarizeMissingToolNames(missing) {
 }
 
 // src/config.ts
-import { existsSync as existsSync3, readFileSync as readFileSync4 } from "fs";
+import { existsSync as existsSync3, readFileSync as readFileSync3 } from "fs";
 import { homedir as homedir2 } from "os";
 import { dirname as dirname2, join as join2, resolve } from "path";
 var PACKAGE_ID = "@vanillagreen/pi-claude-bridge";
@@ -22606,7 +22644,7 @@ function settingsPaths(cwd) {
 function tryParseJson(path) {
   if (!existsSync3(path)) return {};
   try {
-    return JSON.parse(readFileSync4(path, "utf-8"));
+    return JSON.parse(readFileSync3(path, "utf-8"));
   } catch {
     return {};
   }
@@ -22616,7 +22654,7 @@ function readManagerConfig(cwd) {
   for (const path of settingsPaths(cwd)) {
     if (!existsSync3(path)) continue;
     try {
-      const parsed = JSON.parse(readFileSync4(path, "utf8"));
+      const parsed = JSON.parse(readFileSync3(path, "utf8"));
       const configRoot = asRecord(asRecord(asRecord(parsed?.vstack)?.extensionManager)?.config);
       const config2 = asRecord(configRoot?.[PACKAGE_ID]);
       if (config2) mergeDeep(merged, config2);
@@ -22720,7 +22758,7 @@ function loadConfig(cwd) {
 }
 
 // src/agents-md.ts
-import { existsSync as existsSync4, readFileSync as readFileSync5 } from "fs";
+import { existsSync as existsSync4, readFileSync as readFileSync4 } from "fs";
 import { homedir as homedir3 } from "os";
 import { dirname as dirname3, join as join3, resolve as resolve2 } from "path";
 var GLOBAL_AGENTS_PATH = join3(homedir3(), ".pi", "agent", "AGENTS.md");
@@ -22745,7 +22783,7 @@ function extractAgentsAppend() {
   const agentsPath = resolveAgentsMdPath();
   if (!agentsPath) return void 0;
   try {
-    const content = readFileSync5(agentsPath, "utf-8").trim();
+    const content = readFileSync4(agentsPath, "utf-8").trim();
     if (!content) return void 0;
     const sanitized = sanitizeAgentsContent(content);
     return sanitized.length > 0 ? `# CLAUDE.md
@@ -22765,7 +22803,7 @@ function sanitizeAgentsContent(content) {
 }
 
 // src/prompt-context.ts
-import { existsSync as existsSync5, readFileSync as readFileSync6 } from "fs";
+import { existsSync as existsSync5, readFileSync as readFileSync5 } from "fs";
 import { homedir as homedir4 } from "os";
 import { dirname as dirname4, join as join4, resolve as resolve3 } from "path";
 function piUserDir2() {
@@ -22776,7 +22814,7 @@ function piUserDir2() {
 function readTrimmed(path) {
   try {
     if (!existsSync5(path)) return void 0;
-    const content = readFileSync6(path, "utf8").trim();
+    const content = readFileSync5(path, "utf8").trim();
     return content.length > 0 ? content : void 0;
   } catch {
     return void 0;
@@ -37607,7 +37645,7 @@ function preflightClaudeExecutable(path, cwd) {
   }
   let fileType;
   try {
-    fileType = classifyClaudeExecutableBytes(readFileSync7(realPath).subarray(0, 16));
+    fileType = classifyClaudeExecutableBytes(readFileSync6(realPath).subarray(0, 16));
   } catch (err) {
     throw makeClaudePreflightError("Claude Code executable preflight failed: cannot read executable header before spawning Claude Code.", {
       code: codeValue(err, "EACCES"),
