@@ -22237,9 +22237,36 @@ function convertPiMessages(messages, customToolNameToSdk) {
 }
 
 // src/models.ts
-var MODEL_IDS_IN_ORDER = ["claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5"];
+var MODEL_IDS_IN_ORDER = [
+  "claude-fable-5",
+  "claude-opus-4-8",
+  "claude-opus-4-7",
+  "claude-opus-4-6",
+  "claude-sonnet-4-6",
+  "claude-haiku-4-5"
+];
+var FALLBACK_MODELS = {
+  "claude-fable-5": {
+    id: "claude-fable-5",
+    name: "Claude Fable 5",
+    reasoning: true,
+    thinkingLevelMap: { xhigh: "xhigh" },
+    input: ["text", "image"],
+    contextWindow: 1e6,
+    maxTokens: 128e3
+  },
+  "claude-opus-4-8": {
+    id: "claude-opus-4-8",
+    name: "Claude Opus 4.8",
+    reasoning: true,
+    thinkingLevelMap: { xhigh: "xhigh" },
+    input: ["text", "image"],
+    contextWindow: 1e6,
+    maxTokens: 128e3
+  }
+};
 function buildModels(piAiModels) {
-  return MODEL_IDS_IN_ORDER.map((id) => piAiModels.find((m4) => m4.id === id)).filter((m4) => m4 != null).map(({ id, name, reasoning, input, contextWindow, maxTokens, thinkingLevelMap }) => ({
+  return MODEL_IDS_IN_ORDER.map((id) => piAiModels.find((m4) => m4.id === id) ?? FALLBACK_MODELS[id]).filter((m4) => m4 != null).map(({ id, name, reasoning, input, contextWindow, maxTokens, thinkingLevelMap }) => ({
     id,
     name,
     reasoning,

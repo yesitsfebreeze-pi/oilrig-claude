@@ -9,7 +9,7 @@ Forked from [`elidickinson/pi-claude-bridge`](https://github.com/elidickinson/pi
 
 ## Highlights
 
-- `claude-bridge/claude-opus-4-8`, Opus 4-7, Sonnet, and Haiku in `/model`.
+- `claude-bridge/claude-fable-5`, Opus 4.8, Opus 4.7, Sonnet, and Haiku in `/model`.
 - Pi tool calls run on Pi; Claude Code handles reasoning.
 - Tool-use turns block until Pi-delivered tool results reach Claude Code, including persistent subagent panes.
 - Session continuity across normal turns, `/compact`, tree navigation, and abort recovery.
@@ -89,6 +89,10 @@ Pi does not have a native `max` thinking level; it exposes up to `xhigh`, and ea
 ```
 
 Keys may be bare model IDs (`claude-opus-4-8`), `claude-bridge/<id>`, or `*` for all bridge models. Values are `low`, `medium`, `high`, `xhigh`, or `max`.
+
+### Fable 5 caveat
+
+The bridge registers `claude-bridge/claude-fable-5` and `claude-bridge/claude-opus-4-8` even when Pi's Anthropic model registry has not shipped those entries yet. Claude can route Fable 5 prompts flagged by its cyber/bio safety classifiers to Opus 4.8 in Claude Code or API surfaces. This bridge does not add its own fallback layer, so flagged Fable 5 requests may be less reliable in Pi if the underlying Claude Code SDK does not handle the reroute transparently for that turn.
 
 ## Extra usage and rate limits
 

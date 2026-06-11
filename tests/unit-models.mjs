@@ -34,10 +34,32 @@ describe("MODELS projection", () => {
 		assert.deepEqual(models.map((m) => m.id), MODEL_IDS_IN_ORDER);
 	});
 
-	it("silently drops IDs missing from pi-ai (no fallback)", () => {
-		// Only haiku present — opus/sonnet vanish from picker.
+	it("lists Fable 5 before Opus models", () => {
+		const models = buildModels(MODEL_IDS_IN_ORDER.map(mockPiAiModel));
+		assert.equal(models[0]?.id, "claude-fable-5");
+	});
+
+	it("fills bridge-owned future IDs missing from pi-ai and drops unknown missing IDs", () => {
 		const models = buildModels([mockPiAiModel("claude-haiku-4-5")]);
-		assert.deepEqual(models.map((m) => m.id), ["claude-haiku-4-5"]);
+		assert.deepEqual(models.map((m) => m.id), ["claude-fable-5", "claude-opus-4-8", "claude-haiku-4-5"]);
+		assert.equal(models.find((m) => m.id === "claude-fable-5")?.name, "Claude Fable 5");
+		assert.equal(models.find((m) => m.id === "claude-fable-5")?.contextWindow, 1000000);
+		assert.equal(models.find((m) => m.id === "claude-opus-4-8")?.maxTokens, 128000);
+	});
+
+	it("prefers pi-ai metadata over bridge fallback metadata", () => {
+		const models = buildModels([{
+			...mockPiAiModel("claude-fable-5"),
+			name: "Registry Fable",
+			contextWindow: 123,
+			maxTokens: 456,
+			thinkingLevelMap: { xhigh: "max" },
+		}]);
+		const fable = models.find((m) => m.id === "claude-fable-5");
+		assert.equal(fable?.name, "Registry Fable");
+		assert.equal(fable?.contextWindow, 123);
+		assert.equal(fable?.maxTokens, 456);
+		assert.deepEqual(fable?.thinkingLevelMap, { xhigh: "max" });
 	});
 
 	it("zeros out cost regardless of pi-ai pricing", () => {
@@ -58,6 +80,10 @@ describe("resolveModelId", () => {
 
 	it("opus shortcut resolves to claude-opus-4-8 (first opus in order)", () => {
 		assert.equal(resolveModelId(models, "opus"), "claude-opus-4-8");
+	});
+
+	it("fable shortcut resolves to claude-fable-5", () => {
+		assert.equal(resolveModelId(models, "fable"), "claude-fable-5");
 	});
 
 	it("haiku shortcut resolves to claude-haiku-4-5", () => {

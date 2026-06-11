@@ -8,7 +8,8 @@
 # Rate limit: the usage endpoint is aggressively limited — don't run repeatedly.
 #
 # Usage: tests/usage-test.sh [model] [turns]
-#   model: claude-haiku-4-5 (default), claude-sonnet-4-6, claude-opus-4-6
+#   model: claude-haiku-4-5 (default), claude-fable-5, claude-opus-4-8,
+#          claude-opus-4-7, claude-opus-4-6, claude-sonnet-4-6
 #   turns: number of conversation turns (default: 10)
 
 source "$(dirname "$0")/lib/bash-setup.sh"
@@ -38,7 +39,10 @@ get_usage() {
 # --- Map model to Claude Code model ID ---
 # Claude Code uses different model IDs than the bridge.
 case "$MODEL" in
+  claude-fable-5)     CC_MODEL="claude-fable-5" ;;
   claude-haiku-4-5)   CC_MODEL="claude-haiku-4-5" ;;
+  claude-opus-4-8)    CC_MODEL="claude-opus-4-8" ;;
+  claude-opus-4-7)    CC_MODEL="claude-opus-4-7" ;;
   claude-sonnet-4-6)  CC_MODEL="claude-sonnet-4-6" ;;
   claude-opus-4-6)    CC_MODEL="claude-opus-4-6" ;;
   *)                  CC_MODEL="$MODEL" ;;
