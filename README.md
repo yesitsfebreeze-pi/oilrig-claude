@@ -45,6 +45,8 @@ Extra Pi context is off by default. Enable per item in the extension manager whe
 
 Open `/extensions:settings`; settings appear under the **Claude Bridge** tab.
 
+Project settings in `.pi/settings.json` apply only after Pi marks the workspace trusted; before trust, vstack Pi extensions read user/global settings only.
+
 ### General
 
 | Setting | What it does |

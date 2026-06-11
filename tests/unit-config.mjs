@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { loadConfig } from "../src/config.ts";
+import { loadConfig, recordProjectTrust } from "../src/config.ts";
 
 function withTempDirs(fn) {
 	const root = mkdtempSync(join(tmpdir(), "claude-bridge-config-"));
@@ -26,6 +26,29 @@ function withTempDirs(fn) {
 }
 
 describe("loadConfig", () => {
+	it("ignores project settings until project trust is recorded", () => withTempDirs(({ user, project }) => {
+		writeFileSync(join(user, "settings.json"), JSON.stringify({
+			vstack: { extensionManager: { config: { "@vanillagreen/pi-claude-bridge": { allowExtraUsage: false } } } },
+		}));
+		writeFileSync(join(project, ".pi", "settings.json"), JSON.stringify({
+			vstack: { extensionManager: { config: { "@vanillagreen/pi-claude-bridge": { allowExtraUsage: true } } } },
+		}));
+
+		const config = loadConfig(project);
+		assert.equal(config.provider?.allowExtraUsage, false);
+	}));
+
+	it("reads trusted legacy project config from project root when cwd is nested", () => withTempDirs(({ project }) => {
+		const nested = join(project, "src", "feature");
+		mkdirSync(nested, { recursive: true });
+		writeFileSync(join(project, ".pi", "settings.json"), "{}");
+		writeFileSync(join(project, ".pi", "claude-bridge.json"), JSON.stringify({ provider: { fastMode: true } }));
+		recordProjectTrust({ cwd: nested, isProjectTrusted: () => true });
+
+		const config = loadConfig(nested);
+		assert.equal(config.provider?.fastMode, true);
+	}));
+
 	it("maps extension-manager allowExtraUsage into provider config", () => withTempDirs(({ user, project }) => {
 		writeFileSync(join(user, "settings.json"), JSON.stringify({
 			vstack: { extensionManager: { config: { "@vanillagreen/pi-claude-bridge": { allowExtraUsage: false } } } },
@@ -33,6 +56,7 @@ describe("loadConfig", () => {
 		writeFileSync(join(project, ".pi", "settings.json"), JSON.stringify({
 			vstack: { extensionManager: { config: { "@vanillagreen/pi-claude-bridge": { allowExtraUsage: true } } } },
 		}));
+		recordProjectTrust({ cwd: project, isProjectTrusted: () => true });
 
 		const config = loadConfig(project);
 		assert.equal(config.provider?.allowExtraUsage, true);
@@ -53,6 +77,7 @@ describe("loadConfig", () => {
 				modelEffortOverrides: { "claude-bridge/claude-opus-4-8": "max", "claude-haiku-4-5": "low" },
 			} } } },
 		}));
+		recordProjectTrust({ cwd: project, isProjectTrusted: () => true });
 
 		const config = loadConfig(project);
 		assert.equal(config.provider?.fastMode, true);
@@ -70,6 +95,7 @@ describe("loadConfig", () => {
 				modelEffortOverrides: "not json",
 			} } } },
 		}));
+		recordProjectTrust({ cwd: project, isProjectTrusted: () => true });
 
 		const config = loadConfig(project);
 		assert.equal(config.provider?.forceEffort, undefined);
@@ -86,6 +112,7 @@ describe("loadConfig", () => {
 				modelEffortOverrides: "{}",
 			} } } },
 		}));
+		recordProjectTrust({ cwd: project, isProjectTrusted: () => true });
 
 		const config = loadConfig(project);
 		assert.equal(config.provider?.forceEffort, undefined);

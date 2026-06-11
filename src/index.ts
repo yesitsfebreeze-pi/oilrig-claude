@@ -17,7 +17,7 @@ import { verifyWrittenSession as _verifyWrittenSession } from "./session-verify.
 import { extractAllToolResults as _extractAllToolResults, type McpResult } from "./extract-tool-results.js";
 import { QueryContext, ctx, stackDepth, pushContext, popContext } from "./query-state.js";
 import { findUnpairedToolUses, summarizeMissingToolNames, type MissingToolResult } from "./tool-pairing-audit.js";
-import { loadConfig, normalizeEffortLevel, type Config } from "./config.js";
+import { loadConfig, normalizeEffortLevel, recordProjectTrust, type Config } from "./config.js";
 import { extractAgentsAppend } from "./agents-md.js";
 import { buildPromptContextAppend } from "./prompt-context.js";
 import { jsonSchemaToZodShape } from "./typebox-to-zod.js";
@@ -2272,6 +2272,7 @@ export default function (pi: ExtensionAPI) {
 		}
 	};
 	pi.on("session_start", (event, ctx) => {
+		recordProjectTrust(ctx);
 		piUI = ctx.ui;
 		if (event.reason === "new" || event.reason === "resume" || event.reason === "fork") {
 			clearSession(`session_start:${event.reason}`);

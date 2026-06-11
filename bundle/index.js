@@ -22670,8 +22670,34 @@ function projectSettingsPath(cwd) {
     current = parent;
   }
 }
+var PROJECT_TRUST_SYMBOL = /* @__PURE__ */ Symbol.for("vstack.pi.project-trust");
+function projectTrustRegistry() {
+  const host = globalThis;
+  const existing = host[PROJECT_TRUST_SYMBOL];
+  if (existing) return existing;
+  const created = {};
+  host[PROJECT_TRUST_SYMBOL] = created;
+  return created;
+}
+function recordProjectTrust(ctx2) {
+  if (!ctx2.cwd) return;
+  let trusted = true;
+  try {
+    trusted = ctx2.isProjectTrusted?.() === true;
+  } catch {
+    trusted = false;
+  }
+  const registry2 = projectTrustRegistry();
+  if (!registry2.projectSettings) registry2.projectSettings = /* @__PURE__ */ new Map();
+  registry2.projectSettings.set(projectSettingsPath(ctx2.cwd), trusted);
+}
+function projectSettingsTrusted(settingsPath) {
+  return projectTrustRegistry().projectSettings?.get(settingsPath) === true;
+}
 function settingsPaths(cwd) {
-  return [join2(piUserDir(), "settings.json"), projectSettingsPath(cwd)];
+  const user = join2(piUserDir(), "settings.json");
+  const project = projectSettingsPath(cwd);
+  return projectSettingsTrusted(project) ? [user, project] : [user];
 }
 function tryParseJson(path) {
   if (!existsSync3(path)) return {};
@@ -22779,7 +22805,9 @@ function managerToConfig(raw) {
 }
 function loadConfig(cwd) {
   const global2 = tryParseJson(join2(piUserDir(), "claude-bridge.json"));
-  const project = tryParseJson(join2(cwd, ".pi", "claude-bridge.json"));
+  const projectSettings = projectSettingsPath(cwd);
+  const trustedProject = projectSettingsTrusted(projectSettings);
+  const project = trustedProject ? tryParseJson(join2(dirname2(projectSettings), "claude-bridge.json")) : {};
   const manager = managerToConfig(readManagerConfig(cwd));
   const provider = normalizeProviderConfig({ ...global2.provider, ...project.provider, ...manager.provider });
   return {
@@ -39293,6 +39321,7 @@ function index_default(pi) {
     }
   };
   pi.on("session_start", (event, ctx2) => {
+    recordProjectTrust(ctx2);
     piUI = ctx2.ui;
     if (event.reason === "new" || event.reason === "resume" || event.reason === "fork") {
       clearSession(`session_start:${event.reason}`);
