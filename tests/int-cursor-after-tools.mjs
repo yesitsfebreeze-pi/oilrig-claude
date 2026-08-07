@@ -7,7 +7,7 @@
 // stale closure's context.messages.length (=1), causing a spurious rebuild
 // on the next turn.
 //
-// See: https://github.com/elidickinson/pi-claude-bridge/issues/4
+// See: https://github.com/elidickinson/pi-claude/issues/4
 
 import { test } from "node:test";
 import assert from "node:assert";

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# A/B usage comparison: pi-claude-bridge vs Claude Code direct.
+# A/B usage comparison: pi-claude vs Claude Code direct.
 # Runs the same conversation through both paths and compares
 # subscription usage delta and token metrics.
 #
@@ -134,11 +134,11 @@ echo "Turns: $NUM_TURNS"
 echo ""
 
 # ============================================================
-# Run A: pi-claude-bridge
+# Run A: pi-claude
 # ============================================================
 
 echo "=========================================="
-echo "  Run A: pi-claude-bridge"
+echo "  Run A: pi-claude"
 echo "=========================================="
 
 echo "Fetching usage before..."

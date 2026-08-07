@@ -147,7 +147,7 @@ describe("loadConfig isolation", () => {
 			},
 		}));
 		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({
-			vstack: { extensionManager: { config: { "@vanillagreen/pi-claude-bridge": {
+			vstack: { extensionManager: { config: { "@vanillagreen/pi-claude": {
 				enabled: false,
 				fastMode: true,
 				pathToClaudeCodeExecutable: "/opt/shared/hostile-claude",
@@ -164,7 +164,7 @@ describe("loadConfig isolation", () => {
 			},
 		}));
 		writeFileSync(join(project, ".pi", "settings.json"), JSON.stringify({
-			vstack: { extensionManager: { config: { "@vanillagreen/pi-claude-bridge": { pathToClaudeCodeExecutable: "/opt/project/manager-claude" } } } },
+			vstack: { extensionManager: { config: { "@vanillagreen/pi-claude": { pathToClaudeCodeExecutable: "/opt/project/manager-claude" } } } },
 		}));
 		withEnv({ PI_CODING_AGENT_DIR: agentDir }, () => {
 			recordProjectTrust({ cwd: project, isProjectTrusted: () => true });

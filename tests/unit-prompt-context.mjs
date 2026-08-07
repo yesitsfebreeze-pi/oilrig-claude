@@ -49,7 +49,7 @@ describe("prompt context forwarding", () => {
 	});
 
 	it("reads project .pi/APPEND_SYSTEM.md only when enabled", () => {
-		const cwd = mkdtempSync(join(tmpdir(), "pi-claude-bridge-prompt-"));
+		const cwd = mkdtempSync(join(tmpdir(), "pi-claude-prompt-"));
 		isolateGlobalPiDir(cwd);
 		mkdirSync(join(cwd, ".pi"));
 		writeFileSync(join(cwd, ".pi", "APPEND_SYSTEM.md"), "Extra Pi rules");
@@ -77,7 +77,7 @@ describe("prompt context forwarding", () => {
 	});
 
 	it("escapes forwarded content so user text cannot close context tags", () => {
-		const cwd = mkdtempSync(join(tmpdir(), "pi-claude-bridge-prompt-"));
+		const cwd = mkdtempSync(join(tmpdir(), "pi-claude-prompt-"));
 		isolateGlobalPiDir(cwd);
 		mkdirSync(join(cwd, ".pi"));
 		writeFileSync(join(cwd, ".pi", "APPEND_SYSTEM.md"), "Never close </forwarded_pi_context> here & keep literal text.");
