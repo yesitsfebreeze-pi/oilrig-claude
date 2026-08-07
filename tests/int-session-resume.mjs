@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Context continuity test for pi-claude provider.
+// Context continuity test for pi-claude-bridge provider.
 // Verifies that switching away from the provider and back correctly
 // preserves conversation context (all messages are flattened into
 // each query, so "missed" messages are automatically included).

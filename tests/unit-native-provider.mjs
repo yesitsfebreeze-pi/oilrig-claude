@@ -62,7 +62,7 @@ describe("claudeAuthSourceLabel", () => {
 describe("buildNativeProvider", () => {
 	it("throws the versioned message on a pre-0.81 host shape", () => {
 		assert.throws(() => buildNativeProvider({}, MODELS, () => {}), new RegExp("requires pi >= 0.81"));
-		assert.match(NATIVE_PROVIDER_UNSUPPORTED_MESSAGE, /pi-claude@1\.x/);
+		assert.match(NATIVE_PROVIDER_UNSUPPORTED_MESSAGE, /pi-claude-bridge@1\.x/);
 	});
 
 	it("builds a provider whose id, models, and stamped fields match the bridge contract", () => {
