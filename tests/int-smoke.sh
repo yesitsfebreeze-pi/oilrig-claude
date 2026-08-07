@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Smoke tests for pi-claude-bridge provider.
+# Smoke tests for pi-claude provider.
 # Requires: pi CLI, Claude Code (for Agent SDK subprocess).
 # Requires: CLAUDE_BRIDGE_TESTING_ALT_MODEL (e.g. "MiniMax-M2.7-highspeed")
 

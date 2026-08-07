@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prompt cache efficiency test for pi-claude-bridge.
+# Prompt cache efficiency test for pi-claude.
 # Runs a multi-turn conversation and verifies Anthropic prompt caching is working.
 # Expects: cacheRead stays nonzero after the first cached turn and cache hit
 #   rate stays high. Claude Code may report smaller cacheRead on short tool

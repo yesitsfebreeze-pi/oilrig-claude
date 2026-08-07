@@ -27045,7 +27045,7 @@ function diagDump(label, data) {
 }
 
 // src/config.ts
-var PACKAGE_ID = "@vanillagreen/pi-claude-bridge";
+var PACKAGE_ID = "@vanillagreen/pi-claude";
 var EXTERNAL_CONFIG_RESOLVER_SYMBOL = /* @__PURE__ */ Symbol.for("vstack.pi.extension-config-resolver");
 var VALID_EFFORT_LEVELS = /* @__PURE__ */ new Set(["low", "medium", "high", "xhigh", "max"]);
 function expandHome(input) {
@@ -28868,7 +28868,7 @@ function hasClaudeCredentials(env = process.env, platform = osPlatform()) {
 }
 
 // src/native-provider.ts
-var NATIVE_PROVIDER_UNSUPPORTED_MESSAGE = "Claude bridge 2.x requires pi >= 0.81 (native provider API). Upgrade the host pi, or pin @vanillagreen/pi-claude-bridge@1.x.";
+var NATIVE_PROVIDER_UNSUPPORTED_MESSAGE = "Claude bridge 2.x requires pi >= 0.81 (native provider API). Upgrade the host pi, or pin @vanillagreen/pi-claude@1.x.";
 function supportsNativeProvider(piAi2) {
   return typeof piAi2?.createProvider === "function";
 }
@@ -45532,7 +45532,7 @@ async function tryOpenExtensionManagerSettings(ctx2) {
   const openQuickSettings = host[/* @__PURE__ */ Symbol.for("vstack.pi.extension-manager.open-quick-settings")];
   if (typeof openQuickSettings !== "function") return false;
   try {
-    await openQuickSettings(ctx2, "@vanillagreen/pi-claude-bridge");
+    await openQuickSettings(ctx2, "@vanillagreen/pi-claude");
     return true;
   } catch {
     return false;
@@ -45922,7 +45922,7 @@ function buildPromptContextAppend(systemPrompt, cwd, settings) {
       "forwarded_pi_context",
       {},
       [
-        "The following content was explicitly enabled in pi-claude-bridge settings and comes from Pi prompt files or before_agent_start prompt hooks.",
+        "The following content was explicitly enabled in pi-claude settings and comes from Pi prompt files or before_agent_start prompt hooks.",
         ...parts
       ].join("\n\n"),
       false

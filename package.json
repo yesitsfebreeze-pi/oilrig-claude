@@ -1,6 +1,6 @@
 {
-  "name": "@vanillagreen/pi-claude-bridge",
-  "version": "3.1.6",
+  "name": "@vanillagreen/pi-claude",
+  "version": "3.1.7",
   "description": "Pi provider bridge that runs Claude Code through the Claude Agent SDK, with opt-in forwarding for Pi prompt context.",
   "type": "module",
   "keywords": [
@@ -13,9 +13,11 @@
   "license": "MIT",
   "pi": {
     "extensions": [
-      "./bundle/index.js"
+      "./bundle/index.js",
+      "./bundle/bridge-recover.js",
+      "./bundle/anchor-instructions.js"
     ],
-    "image": "https://raw.githubusercontent.com/vanillagreencom/vstack/main/pi-extensions/pi-claude-bridge/assets/bridge-demo.png"
+    "image": "https://raw.githubusercontent.com/vanillagreencom/vstack/main/pi-extensions/pi-claude/assets/bridge-demo.png"
   },
   "vstack": {
     "extensionManager": {
@@ -151,7 +153,7 @@
     "typescript": "^6.0.3"
   },
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=bundle/index.js --external:@earendil-works/pi-ai --external:@earendil-works/pi-coding-agent && esbuild src/connector-inventory.ts --bundle --platform=node --format=esm --target=node22 --outfile=bundle/connector-inventory.js",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=bundle/index.js --external:@earendil-works/pi-ai --external:@earendil-works/pi-coding-agent && esbuild src/connector-inventory.ts --bundle --platform=node --format=esm --target=node22 --outfile=bundle/connector-inventory.js && esbuild src/bridge-recover.ts --bundle --platform=node --format=esm --target=node22 --outfile=bundle/bridge-recover.js --external:@earendil-works/pi-coding-agent && esbuild src/anchor-instructions.ts --bundle --platform=node --format=esm --target=node22 --outfile=bundle/anchor-instructions.js --external:@earendil-works/pi-coding-agent",
     "prepack": "npm run build",
     "test:unit": "node --import tsx --test tests/unit-*.mjs",
     "test": "set -a && [ -f .env.test ] && . ./.env.test; set +a && npm run test:unit && tests/int-smoke.sh && tests/int-multi-turn.sh && tests/int-cache.sh && node --import tsx --test tests/int-*.mjs",
@@ -169,9 +171,9 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vanillagreencom/vstack.git",
-    "directory": "pi-extensions/pi-claude-bridge"
+    "directory": "pi-extensions/pi-claude"
   },
-  "homepage": "https://github.com/vanillagreencom/vstack/tree/main/pi-extensions/pi-claude-bridge",
+  "homepage": "https://github.com/vanillagreencom/vstack/tree/main/pi-extensions/pi-claude",
   "bugs": {
     "url": "https://github.com/vanillagreencom/vstack/issues"
   },

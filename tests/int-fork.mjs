@@ -2,7 +2,7 @@
 /**
  * Fork context-isolation test.
  *
- * Regression guard for: pi-claude-bridge: don't inherit parent's Claude session on fork.
+ * Regression guard for: pi-claude: don't inherit parent's Claude session on fork.
  *
  * Pre-fix, createBranchedSession copied the bridge's persisted claude-bridge-session
  * markers from the parent into the new pi.jsonl, and the bridge's session_start
