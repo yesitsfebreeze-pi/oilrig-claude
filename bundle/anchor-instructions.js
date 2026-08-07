@@ -18,18 +18,7 @@ function isInjected(msg) {
   const t = text.trimStart();
   return INJECTED_PREFIXES.some((p) => t.startsWith(p));
 }
-var EAGER_TYPE = "anchor-eager-rule";
 function anchor_instructions_default(pi) {
-  pi.on("before_agent_start", async (_event, ctx) => {
-    const entries = ctx.sessionManager.getEntries();
-    if (entries.some(
-      (e) => e.type === "custom_message" && e.customType === EAGER_TYPE
-    ))
-      return;
-    return {
-      message: { customType: EAGER_TYPE, content: EAGER_RULE, display: false }
-    };
-  });
   pi.on("context", async (event) => {
     const messages = event?.messages;
     if (!Array.isArray(messages) || messages.length === 0) return;
@@ -56,5 +45,6 @@ function anchor_instructions_default(pi) {
   });
 }
 export {
+  EAGER_RULE,
   anchor_instructions_default as default
 };

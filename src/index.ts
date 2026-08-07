@@ -140,6 +140,10 @@ const ROTATION_STATE_KEY = Symbol("claude-bridge:rotationState");
 
 /** Hard cap on account-rotation attempts per request (CHANGELOG 3.0.0). */
 const MAX_ROTATION_ATTEMPTS = 16;
+// How long a post-abort prompt waits for the aborted query's teardown before
+// giving up. Teardown is normally ~100ms (SDK child exit + drain); the grace
+// only bounds the pathological case of a child that won't die.
+const ABORT_TEARDOWN_GRACE_MS = 10_000;
 
 interface RotationRequestState {
 	excludedProfileIds: Set<string>;
@@ -538,6 +542,50 @@ export function streamClaudeAgentSdk(model: Model<any>, context: Context, option
 	const cwd = (options as { cwd?: string } | undefined)?.cwd ?? process.cwd();
 	debug(`provider: streamClaudeAgentSdk called, activeQuery=${!!ctx().activeQuery}, lastMsgRole=${lastMsgRole}, isReentrant=${ctx().activeQuery !== null}`);
 
+	// --- Prompt during abort teardown ---
+	// pi ends an aborted turn on its side the moment the user aborts; the next
+	// prompt can arrive while this module is still tearing the SDK child down
+	// (activeQuery not yet cleared — a ~100ms window). The delivery branch below
+	// would classify that prompt as a mid-query steer, defer it for replay, and
+	// the abort-completion handler would then drop it loudly — leaving pi
+	// awaiting a stream that ends empty (int-tool-message.mjs "abort during tool
+	// execution recovers cleanly"). Instead: wait out the teardown, then run the
+	// call as the fresh query it really is (needsRebuild was marked on abort, so
+	// the rebuild re-imports the aborted turn from pi history) and forward its
+	// events onto the stream pi already holds.
+	if (ctx().activeQuery && ctx().aborting && lastMsgRole === "user") {
+		const tearingDown = ctx();
+		debug(`provider: user prompt arrived during abort teardown — waiting for teardown, then running fresh`);
+		void (async () => {
+			const deadline = Date.now() + ABORT_TEARDOWN_GRACE_MS;
+			while (tearingDown.activeQuery && Date.now() < deadline) {
+				await new Promise((resolve) => setTimeout(resolve, 25));
+			}
+			if (tearingDown.activeQuery) {
+				const message = "Claude bridge: aborted query did not tear down in time — send the prompt again.";
+				debug(`provider: abort teardown grace expired; failing post-abort prompt: ${message}`);
+				stream.push({ type: "error", reason: "error", error: {
+					role: "assistant", content: [],
+					api: model.api, provider: model.provider, model: model.id,
+					usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
+						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+					stopReason: "error", timestamp: Date.now(),
+					errorMessage: message,
+				} });
+				stream.end();
+				return;
+			}
+			try {
+				for await (const event of streamClaudeAgentSdk(model, context, options)) stream.push(event);
+			} catch (error) {
+				debug(`provider: post-abort fresh query failed:`, error);
+			} finally {
+				stream.end();
+			}
+		})();
+		return stream;
+	}
+
 	// --- Tool result delivery ---
 	// Pi appends tool results to context and calls back. Extract this turn's results
 	// (everything after the last assistant message) and match against waiting MCP
@@ -705,6 +753,7 @@ export function streamClaudeAgentSdk(model: Model<any>, context: Context, option
 	ctx().pendingToolCalls.clear();
 	ctx().pendingResults.clear();
 	ctx().deferredUserMessages = [];
+	ctx().aborting = false;
 	ctx().resetTurnState(model);
 	ctx().resetToolTracking();
 	ctx().latestCursor = 0;
@@ -1041,6 +1090,7 @@ export function streamClaudeAgentSdk(model: Model<any>, context: Context, option
 	}
 	const onAbort = () => {
 		wasAborted = true;
+		abortCtx.aborting = true;
 		// Prevent stale deferred messages from being replayed by parent on pop
 		dropDeferredUserMessages("abort");
 		reportToolResultMismatch(abortCtx, "abort", cwd, {

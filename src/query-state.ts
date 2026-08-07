@@ -169,6 +169,11 @@ function unique(values: Iterable<string | undefined>): string[] {
 export class QueryContext {
 	// Query-scoped (fully isolated per query)
 	activeQuery: unknown | null = null;
+	/** True from the moment pi's abort signal fired until this context's next
+	 *  fresh query. A user prompt arriving in that window is NOT a mid-query
+	 *  steer — the query it would steer is already dead — and must instead wait
+	 *  for teardown and run fresh (see the abort-teardown branch in index.ts). */
+	aborting = false;
 	currentPiStream: AssistantMessageEventStream | null = null;
 	latestCursor = 0;
 	pendingToolCalls = new Map<string, PendingToolCall>();

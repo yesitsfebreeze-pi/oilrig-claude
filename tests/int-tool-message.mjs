@@ -105,7 +105,10 @@ describe("tool-message integration", () => {
 		assert.ok(matches >= 3, `Expected 3 SlowTool results, found ${matches}: ${text.slice(0, 300)}`);
 	});
 
-	it("steer during text response (no tool call) completes both turns", { timeout: 30_000 }, async () => {
+	// 60s, not TEST_TIMEOUT: the first turn alone (5 long paragraphs from haiku)
+	// measures 25-29s on a normal API day, and the steer replays as a second
+	// full turn after it.
+	it("steer during text response (no tool call) completes both turns", { timeout: 60_000 }, async () => {
 		// Steer during text-only streaming: the assistant is generating text (no tool
 		// calls), a steer arrives, and pi delivers it after the current turn ends.
 		// Risk: if activeQuery hasn't been cleared by the time pi calls streamSimple

@@ -6,6 +6,7 @@ import { type Model } from "@earendil-works/pi-ai";
 import { createSdkMcpServer, type query, type EffortLevel, type SettingSource } from "@anthropic-ai/claude-agent-sdk";
 import { accountSessionScope, subscriberProfileEnv, type ClaudeAccountRoute } from "./account-router.js";
 import { extractAgentsAppend } from "./agents-md.js";
+import { EAGER_RULE } from "./anchor-instructions.js";
 import { spawnClaudeCodeWithDiagnostics } from "./claude-executable.js";
 import { normalizeEffortLevel, type Config } from "./config.js";
 import { connectorQueryOptions, connectorWriteModeFor, connectorsEnabledFor, settingSourcesForQuery } from "./connectors.js";
@@ -89,7 +90,10 @@ export function buildClaudeQueryOptions(input: BuildClaudeQueryOptionsInput): Bu
 	const agentsAppend = appendSystemPrompt ? extractAgentsAppend() : undefined;
 	const skillsAppend = appendSystemPrompt ? extractSkillsBlock(systemPrompt) : undefined;
 	const promptContextAppend = buildPromptContextAppend(systemPrompt, cwd, bridgeConfig.promptContext ?? {});
-	const appendParts = [agentsAppend, skillsAppend, promptContextAppend.text].filter((part): part is string => Boolean(part));
+	// EAGER_RULE rides the system prompt — not a custom message: as a message it
+	// became a turn-1 prior and forced REBUILD over clean-start (see
+	// anchor-instructions.ts header).
+	const appendParts = [EAGER_RULE, agentsAppend, skillsAppend, promptContextAppend.text].filter((part): part is string => Boolean(part));
 	const systemPromptAppend = appendParts.length > 0 ? appendParts.join("\n\n") : undefined;
 
 	// MCP auto-loading suppression: with appendSystemPrompt=true (default), the

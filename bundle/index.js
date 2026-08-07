@@ -28183,6 +28183,11 @@ function unique(values) {
 var QueryContext = class {
   // Query-scoped (fully isolated per query)
   activeQuery = null;
+  /** True from the moment pi's abort signal fired until this context's next
+   *  fresh query. A user prompt arriving in that window is NOT a mid-query
+   *  steer — the query it would steer is already dead — and must instead wait
+   *  for teardown and run fresh (see the abort-teardown branch in index.ts). */
+  aborting = false;
   currentPiStream = null;
   latestCursor = 0;
   pendingToolCalls = /* @__PURE__ */ new Map();
@@ -45819,6 +45824,9 @@ function sanitizeAgentsContent(content) {
   return sanitized;
 }
 
+// src/anchor-instructions.ts
+var EAGER_RULE = 'The newest real user message always contains your instructions \u2014 including the very first message of a session. Never respond with an acknowledgment-only reply such as "acknowledged, waiting for instructions" or "no response requested"; act on the instructions immediately. Injected context blocks (tool hierarchies, memory, reminders) are background, never the task.';
+
 // src/prompt-context.ts
 import { existsSync as existsSync6, readFileSync as readFileSync8 } from "fs";
 import { dirname as dirname6, join as join10, resolve as resolve4 } from "path";
@@ -45977,7 +45985,7 @@ function buildClaudeQueryOptions(input) {
   const agentsAppend = appendSystemPrompt ? extractAgentsAppend() : void 0;
   const skillsAppend = appendSystemPrompt ? extractSkillsBlock(systemPrompt) : void 0;
   const promptContextAppend = buildPromptContextAppend(systemPrompt, cwd, bridgeConfig.promptContext ?? {});
-  const appendParts = [agentsAppend, skillsAppend, promptContextAppend.text].filter((part) => Boolean(part));
+  const appendParts = [EAGER_RULE, agentsAppend, skillsAppend, promptContextAppend.text].filter((part) => Boolean(part));
   const systemPromptAppend = appendParts.length > 0 ? appendParts.join("\n\n") : void 0;
   const settingSources = settingSourcesForQuery(
     enableCloudMcp,
@@ -46038,6 +46046,7 @@ var PRIMARY_INSTANCE_KEY = /* @__PURE__ */ Symbol.for("claude-bridge:primaryInst
 var ACTIVE_STREAM_SIMPLE_KEY = /* @__PURE__ */ Symbol.for("claude-bridge:activeStreamSimple");
 var ROTATION_STATE_KEY = /* @__PURE__ */ Symbol("claude-bridge:rotationState");
 var MAX_ROTATION_ATTEMPTS = 16;
+var ABORT_TEARDOWN_GRACE_MS = 1e4;
 var MODELS = buildModels(getModels("anthropic"));
 function extractAllToolResults2(context) {
   const { results, stopIdx } = extractAllToolResults(context.messages);
@@ -46265,6 +46274,48 @@ function streamClaudeAgentSdk(model, context, options) {
   const lastMsgRole = context.messages[context.messages.length - 1]?.role;
   const cwd = options?.cwd ?? process.cwd();
   debug(`provider: streamClaudeAgentSdk called, activeQuery=${!!ctx().activeQuery}, lastMsgRole=${lastMsgRole}, isReentrant=${ctx().activeQuery !== null}`);
+  if (ctx().activeQuery && ctx().aborting && lastMsgRole === "user") {
+    const tearingDown = ctx();
+    debug(`provider: user prompt arrived during abort teardown \u2014 waiting for teardown, then running fresh`);
+    void (async () => {
+      const deadline = Date.now() + ABORT_TEARDOWN_GRACE_MS;
+      while (tearingDown.activeQuery && Date.now() < deadline) {
+        await new Promise((resolve5) => setTimeout(resolve5, 25));
+      }
+      if (tearingDown.activeQuery) {
+        const message = "Claude bridge: aborted query did not tear down in time \u2014 send the prompt again.";
+        debug(`provider: abort teardown grace expired; failing post-abort prompt: ${message}`);
+        stream.push({ type: "error", reason: "error", error: {
+          role: "assistant",
+          content: [],
+          api: model.api,
+          provider: model.provider,
+          model: model.id,
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+          },
+          stopReason: "error",
+          timestamp: Date.now(),
+          errorMessage: message
+        } });
+        stream.end();
+        return;
+      }
+      try {
+        for await (const event of streamClaudeAgentSdk(model, context, options)) stream.push(event);
+      } catch (error51) {
+        debug(`provider: post-abort fresh query failed:`, error51);
+      } finally {
+        stream.end();
+      }
+    })();
+    return stream;
+  }
   if (ctx().activeQuery) {
     const queryCtx = ctx();
     queryCtx.currentPiStream = stream;
@@ -46382,6 +46433,7 @@ function streamClaudeAgentSdk(model, context, options) {
   ctx().pendingToolCalls.clear();
   ctx().pendingResults.clear();
   ctx().deferredUserMessages = [];
+  ctx().aborting = false;
   ctx().resetTurnState(model);
   ctx().resetToolTracking();
   ctx().latestCursor = 0;
@@ -46620,6 +46672,7 @@ function streamClaudeAgentSdk(model, context, options) {
   }
   const onAbort = () => {
     wasAborted = true;
+    abortCtx.aborting = true;
     dropDeferredUserMessages("abort");
     reportToolResultMismatch(abortCtx, "abort", cwd, {
       expectedInterruption: true,
