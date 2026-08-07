@@ -27045,7 +27045,7 @@ function diagDump(label, data) {
 }
 
 // src/config.ts
-var PACKAGE_ID = "@vanillagreen/pi-claude";
+var PACKAGE_ID = "pi-claude";
 var EXTERNAL_CONFIG_RESOLVER_SYMBOL = /* @__PURE__ */ Symbol.for("vstack.pi.extension-config-resolver");
 var VALID_EFFORT_LEVELS = /* @__PURE__ */ new Set(["low", "medium", "high", "xhigh", "max"]);
 function expandHome(input) {
@@ -28868,7 +28868,7 @@ function hasClaudeCredentials(env = process.env, platform = osPlatform()) {
 }
 
 // src/native-provider.ts
-var NATIVE_PROVIDER_UNSUPPORTED_MESSAGE = "Claude bridge 2.x requires pi >= 0.81 (native provider API). Upgrade the host pi, or pin @vanillagreen/pi-claude@1.x.";
+var NATIVE_PROVIDER_UNSUPPORTED_MESSAGE = "Claude bridge 2.x requires pi >= 0.81 (native provider API). Upgrade the host pi, or pin pi-claude@1.x.";
 function supportsNativeProvider(piAi2) {
   return typeof piAi2?.createProvider === "function";
 }
@@ -44818,7 +44818,7 @@ function verifyWrittenSession2(jsonlPath, expectedSessionId, expectedRecordCount
     safeNotify(
       `Session file issue: ${msg}
 cwd=${displayPath(cwd)} realpath=${displayPath(safeRealpath(cwd))}
-Please copy and paste this message into a new issue at https://github.com/vanillagreencom/vstack/issues/new` + (DEBUG ? ` and attach ${DEBUG_LOG_PATH}` : ` (rerun with CLAUDE_BRIDGE_DEBUG=1 to capture a debug log)`),
+Please copy and paste this message into a new issue at https://github.com/yesitsfebreeze-pi/pi-claude/issues/new` + (DEBUG ? ` and attach ${DEBUG_LOG_PATH}` : ` (rerun with CLAUDE_BRIDGE_DEBUG=1 to capture a debug log)`),
       "warning"
     );
     diagDump("session_verify_fail", { msg, jsonlPath, cwd, realpath: safeRealpath(cwd), claudeConfigDir: claudeDir ?? null });
@@ -45532,7 +45532,7 @@ async function tryOpenExtensionManagerSettings(ctx2) {
   const openQuickSettings = host[/* @__PURE__ */ Symbol.for("vstack.pi.extension-manager.open-quick-settings")];
   if (typeof openQuickSettings !== "function") return false;
   try {
-    await openQuickSettings(ctx2, "@vanillagreen/pi-claude");
+    await openQuickSettings(ctx2, "pi-claude");
     return true;
   } catch {
     return false;

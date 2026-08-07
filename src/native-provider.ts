@@ -25,7 +25,7 @@ import { hasClaudeCredentials } from "./auth-presence.js";
 import { PROVIDER_ID } from "./convert.js";
 
 export const NATIVE_PROVIDER_UNSUPPORTED_MESSAGE =
-	"Claude bridge 2.x requires pi >= 0.81 (native provider API). Upgrade the host pi, or pin @vanillagreen/pi-claude@1.x.";
+	"Claude bridge 2.x requires pi >= 0.81 (native provider API). Upgrade the host pi, or pin pi-claude@1.x.";
 
 /** pi-ai gained createProvider in 0.81 alongside the object-form
  *  registerProvider; its presence is the capability signal for both. */

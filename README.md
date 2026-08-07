@@ -2,8 +2,8 @@
 
 Works with OAuth subscription, no API key, no errors.
 
-![Claude bridge demo response](https://raw.githubusercontent.com/vanillagreencom/vstack/main/pi-extensions/pi-claude/assets/bridge-demo.png)
-![Pi Claude settings panel](https://raw.githubusercontent.com/vanillagreencom/vstack/main/pi-extensions/pi-claude/assets/settings-panel.png)
+![Claude bridge demo response](https://raw.githubusercontent.com/yesitsfebreeze-pi/pi-claude/main/assets/bridge-demo.png)
+![Pi Claude settings panel](https://raw.githubusercontent.com/yesitsfebreeze-pi/pi-claude/main/assets/settings-panel.png)
 
 Run Claude Code as the `pi-claude` Pi provider while keeping Pi's tools and TUI.
 
@@ -26,19 +26,13 @@ Forked from [`elidickinson/pi-claude`](https://github.com/elidickinson/pi-claude
 
 Requires pi ≥ 0.81 (bridge 2.x registers through pi's native provider API, so pi shows the
 Claude models only while a Claude account is actually connected). On older pi, install
-`@vanillagreen/pi-claude@1.x` instead.
+`pi-claude@1.x` instead.
 
-Via [npm](https://www.npmjs.com/package/@vanillagreen/pi-claude):
-
-```bash
-pi install npm:@vanillagreen/pi-claude
-```
-
-Via [vstack](https://github.com/vanillagreencom/vstack):
+From this repo (loaded via hub in the pi-extensions workspace — no `pi install`):
 
 ```bash
-cargo install --git https://github.com/vanillagreencom/vstack.git vstack
-vstack add vanillagreencom/vstack --pi-extension pi-claude --harness pi -y
+git clone https://github.com/yesitsfebreeze-pi/pi-claude.git extensions/pi-claude
+cd extensions/pi-claude && npm install && npm run build
 ```
 
 Restart Pi after installation.
@@ -121,7 +115,7 @@ Each of those lookups is still recorded in the session file as a `claude-bridge-
 That entry needs a pi session to be written into. A host that embeds the bridge **without** one — loading it through a bare resource loader, so `extensionApi` is undefined — gets no record at all, and nothing in the bridge can tell. Such a host can install its own destination:
 
 ```ts
-import { setConnectorCallAuditSink } from "@vanillagreen/pi-claude";
+import { setConnectorCallAuditSink } from "pi-claude";
 
 setConnectorCallAuditSink((record) => myOwnAuditTrail(record));  // pass undefined to clear
 ```
@@ -135,7 +129,7 @@ Extension-manager settings use flat package-scoped keys:
   "vstack": {
     "extensionManager": {
       "config": {
-        "@vanillagreen/pi-claude": {
+        "pi-claude": {
           "enableConnectors": true,
           "connectorWriteMode": "deny"
         }
@@ -189,13 +183,13 @@ The bridge registers `pi-claude/claude-fable-5`, `pi-claude/claude-opus-5`, `pi-
 `listAccountConnectors()` is the programmatic form for host apps. Import it from the package's `./connector-inventory` entry point:
 
 ```ts
-import { listAccountConnectors, resolveClaudeOAuth } from "@vanillagreen/pi-claude/connector-inventory";
+import { listAccountConnectors, resolveClaudeOAuth } from "pi-claude/connector-inventory";
 ```
 
 The same functions are re-exported from the package root for consuming apps whose vendored `package.json` uses a closed exports map (`{".": "./bundle/index.js"}`), which blocks every subpath:
 
 ```ts
-import { listAccountConnectors } from "@vanillagreen/pi-claude";
+import { listAccountConnectors } from "pi-claude";
 ```
 
 It returns a discriminated result: on success `{ ok: true, complete: true, connectors }`, and on any transport or protocol failure `{ ok: false, reason }`. An account with no connectors is a successful empty list; a failure is never reported as an empty inventory. Credentials resolve from `CLAUDE_CONFIG_DIR` before `$HOME`, so a host running one sidecar per Claude account reads the right account.

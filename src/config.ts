@@ -10,7 +10,7 @@ import { homedir } from "os";
 import { dirname, join, resolve, sep } from "path";
 import { debug } from "./debug.js";
 
-export const PACKAGE_ID = "@vanillagreen/pi-claude";
+export const PACKAGE_ID = "pi-claude";
 
 /**
  * Registry the vstack extension manager reads to display the value an

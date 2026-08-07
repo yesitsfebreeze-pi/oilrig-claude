@@ -20,7 +20,7 @@ async function tryOpenExtensionManagerSettings(ctx: { ui: ExtensionUIContext }):
 	const openQuickSettings = host[Symbol.for("vstack.pi.extension-manager.open-quick-settings")];
 	if (typeof openQuickSettings !== "function") return false;
 	try {
-		await (openQuickSettings as (ctx: unknown, hint?: string) => Promise<void>)(ctx, "@vanillagreen/pi-claude");
+		await (openQuickSettings as (ctx: unknown, hint?: string) => Promise<void>)(ctx, "pi-claude");
 		return true;
 	} catch {
 		return false;

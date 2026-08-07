@@ -1,6 +1,6 @@
 {
-  "name": "@vanillagreen/pi-claude",
-  "version": "3.1.8",
+  "name": "pi-claude",
+  "version": "3.1.9",
   "description": "Pi provider bridge that runs Claude Code through the Claude Agent SDK, with opt-in forwarding for Pi prompt context.",
   "type": "module",
   "keywords": [
@@ -17,7 +17,7 @@
       "./bundle/bridge-recover.js",
       "./bundle/anchor-instructions.js"
     ],
-    "image": "https://raw.githubusercontent.com/vanillagreencom/vstack/main/pi-extensions/pi-claude/assets/bridge-demo.png"
+    "image": "https://raw.githubusercontent.com/yesitsfebreeze-pi/pi-claude/main/assets/bridge-demo.png"
   },
   "vstack": {
     "extensionManager": {
@@ -170,14 +170,13 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vanillagreencom/vstack.git",
-    "directory": "pi-extensions/pi-claude"
+    "url": "git+https://github.com/yesitsfebreeze-pi/pi-claude.git"
   },
-  "homepage": "https://github.com/vanillagreencom/vstack/tree/main/pi-extensions/pi-claude",
+  "homepage": "https://github.com/yesitsfebreeze-pi/pi-claude",
   "bugs": {
-    "url": "https://github.com/vanillagreencom/vstack/issues"
+    "url": "https://github.com/yesitsfebreeze-pi/pi-claude/issues"
   },
-  "author": "vanillagreen",
+  "author": "yesitsfebreeze",
   "publishConfig": {
     "access": "public"
   },

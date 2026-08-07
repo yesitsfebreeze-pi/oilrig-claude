@@ -405,7 +405,7 @@ function verifyWrittenSession(
 		safeNotify(
 			`Session file issue: ${msg}\n` +
 			`cwd=${displayPath(cwd)} realpath=${displayPath(safeRealpath(cwd))}\n` +
-			`Please copy and paste this message into a new issue at https://github.com/vanillagreencom/vstack/issues/new` +
+			`Please copy and paste this message into a new issue at https://github.com/yesitsfebreeze-pi/pi-claude/issues/new` +
 			(DEBUG ? ` and attach ${DEBUG_LOG_PATH}` : ` (rerun with CLAUDE_BRIDGE_DEBUG=1 to capture a debug log)`),
 			"warning",
 		);
