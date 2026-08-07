@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prompt cache efficiency test for pi-claude.
+# Prompt cache efficiency test for oilrig-claude.
 # Runs a multi-turn conversation and verifies Anthropic prompt caching is working.
 # Expects: cacheRead stays nonzero after the first cached turn and cache hit
 #   rate stays high. Claude Code may report smaller cacheRead on short tool
@@ -25,7 +25,7 @@ rm -f "$TMPFILE" "$CLAUDE_BRIDGE_DEBUG_PATH"
 
 echo "Running 5-turn conversation (text + tool use)..."
 timeout 180 pi --no-session -ne -e "$DIR" \
-  --model "pi-claude/claude-haiku-4-5" \
+  --model "oilrig-claude/claude-haiku-4-5" \
   --mode json \
   -p "The secret number is 42. Acknowledge briefly." \
      "Write the secret number to $TMPFILE. Just the number, nothing else." \

@@ -11,7 +11,7 @@ import { QueryContext, ctx, resetStack } from "../src/query-state.ts";
 
 const model = {
 	api: "claude-bridge",
-	provider: "pi-claude",
+	provider: "oilrig-claude",
 	id: "claude-haiku-4-5",
 	cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 };
@@ -598,7 +598,7 @@ describe("account-replay commit boundary (committedOutput)", () => {
 	it("resetTurnState does not clear the query-scoped commit flag", () => {
 		const queryCtx = new QueryContext();
 		queryCtx.noteChildExecutedToolCall("c1", CONNECTOR_TOOL, 0);
-		queryCtx.resetTurnState({ api: "claude-bridge", provider: "pi-claude", id: "claude-haiku-4-5" });
+		queryCtx.resetTurnState({ api: "claude-bridge", provider: "oilrig-claude", id: "claude-haiku-4-5" });
 		assert.equal(queryCtx.committedOutput, true);
 	});
 });

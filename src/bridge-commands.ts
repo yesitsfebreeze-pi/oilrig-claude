@@ -1,4 +1,4 @@
-// The /pi-claude command surface: settings/status UI and the deterministic
+// The /oilrig-claude command surface: settings/status UI and the deterministic
 // connector-inventory report. Extracted from index.ts (pure move).
 
 import { type Model } from "@earendil-works/pi-ai";
@@ -20,7 +20,7 @@ async function tryOpenExtensionManagerSettings(ctx: { ui: ExtensionUIContext }):
 	const openQuickSettings = host[Symbol.for("vstack.pi.extension-manager.open-quick-settings")];
 	if (typeof openQuickSettings !== "function") return false;
 	try {
-		await (openQuickSettings as (ctx: unknown, hint?: string) => Promise<void>)(ctx, "pi-claude");
+		await (openQuickSettings as (ctx: unknown, hint?: string) => Promise<void>)(ctx, "oilrig-claude");
 		return true;
 	} catch {
 		return false;
@@ -71,15 +71,15 @@ export function registerBridgeCommands(pi: ExtensionAPI): void {
 	if (guard[COMMANDS_REGISTERED_KEY]) return;
 	guard[COMMANDS_REGISTERED_KEY] = true;
 
-	pi.registerCommand("pi-claude", {
+	pi.registerCommand("oilrig-claude", {
 		description: "Open Pi Claude settings/status",
 		handler: async (args: string, ctx) => {
-			if (args.trim()) ctx.ui.notify("Unknown /pi-claude argument.", "warning");
+			if (args.trim()) ctx.ui.notify("Unknown /oilrig-claude argument.", "warning");
 			if (await tryOpenExtensionManagerSettings(ctx)) return;
 			showBridgeStatus(ctx);
 		},
 	});
-	pi.registerCommand("pi-claude:connectors", {
+	pi.registerCommand("oilrig-claude:connectors", {
 		description: "List the Claude account's installed claude.ai connectors",
 		handler: async (_args: string, ctx) => reportConnectorInventory(ctx),
 	});

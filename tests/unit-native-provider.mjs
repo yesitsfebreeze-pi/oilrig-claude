@@ -62,24 +62,24 @@ describe("claudeAuthSourceLabel", () => {
 describe("buildNativeProvider", () => {
 	it("throws the versioned message on a pre-0.81 host shape", () => {
 		assert.throws(() => buildNativeProvider({}, MODELS, () => {}), new RegExp("requires pi >= 0.81"));
-		assert.match(NATIVE_PROVIDER_UNSUPPORTED_MESSAGE, /pi-claude@1\.x/);
+		assert.match(NATIVE_PROVIDER_UNSUPPORTED_MESSAGE, /oilrig-claude@1\.x/);
 	});
 
 	it("builds a provider whose id, models, and stamped fields match the bridge contract", () => {
 		const provider = buildNativeProvider(piAi, MODELS, () => {}, {});
-		assert.equal(provider.id, "pi-claude");
+		assert.equal(provider.id, "oilrig-claude");
 		const models = provider.getModels();
 		assert.equal(models.length, 1);
 		assert.equal(models[0].id, "claude-haiku-4-5");
 		// The legacy config path stamped these during composition; the native
 		// path must stamp them itself or downstream provider routing breaks.
-		assert.equal(models[0].provider, "pi-claude");
+		assert.equal(models[0].provider, "oilrig-claude");
 		assert.equal(models[0].api, "claude-bridge");
 	});
 
-	it("re-homes source models under pi-claude even when they carry a provider field", () => {
+	it("re-homes source models under oilrig-claude even when they carry a provider field", () => {
 		const provider = buildNativeProvider(piAi, [{ ...MODELS[0], provider: "anthropic" }], () => {}, {});
-		assert.equal(provider.getModels()[0].provider, "pi-claude");
+		assert.equal(provider.getModels()[0].provider, "oilrig-claude");
 		assert.equal(provider.getModels()[0].api, "claude-bridge");
 	});
 

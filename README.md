@@ -1,17 +1,17 @@
-# pi-claude
+# oilrig-claude
 
 Works with OAuth subscription, no API key, no errors.
 
-![Claude bridge demo response](https://raw.githubusercontent.com/yesitsfebreeze-pi/pi-claude/main/assets/bridge-demo.png)
-![Pi Claude settings panel](https://raw.githubusercontent.com/yesitsfebreeze-pi/pi-claude/main/assets/settings-panel.png)
+![Claude bridge demo response](https://raw.githubusercontent.com/yesitsfebreeze-pi/oilrig-claude/main/assets/bridge-demo.png)
+![Pi Claude settings panel](https://raw.githubusercontent.com/yesitsfebreeze-pi/oilrig-claude/main/assets/settings-panel.png)
 
-Run Claude Code as the `pi-claude` Pi provider while keeping Pi's tools and TUI.
+Run Claude Code as the `oilrig-claude` Pi provider while keeping Pi's tools and TUI.
 
 Forked from [`elidickinson/pi-claude`](https://github.com/elidickinson/pi-claude). This fork removes the AskClaude tool and adds opt-in forwarding for Pi prompt context.
 
 ## Highlights
 
-- `pi-claude/claude-fable-5`, Opus 5, Opus 4.8, Opus 4.7, Opus 4.6, Sonnet 5, Sonnet 4.6, and Haiku in `/model`. `/model opus` selects Opus 5; older Opus releases stay selectable by full ID.
+- `oilrig-claude/claude-fable-5`, Opus 5, Opus 4.8, Opus 4.7, Opus 4.6, Sonnet 5, Sonnet 4.6, and Haiku in `/model`. `/model opus` selects Opus 5; older Opus releases stay selectable by full ID.
 - Pi tool calls run on Pi; Claude Code handles reasoning.
 - Tool-use turns block until Pi-delivered tool results reach Claude Code, including persistent subagent panes.
 - Session continuity across normal turns, `/compact`, tree navigation, abort recovery, and account-profile changes.
@@ -26,13 +26,13 @@ Forked from [`elidickinson/pi-claude`](https://github.com/elidickinson/pi-claude
 
 Requires pi ≥ 0.81 (bridge 2.x registers through pi's native provider API, so pi shows the
 Claude models only while a Claude account is actually connected). On older pi, install
-`pi-claude@1.x` instead.
+`oilrig-claude@1.x` instead.
 
 From this repo (loaded via hub in the pi-extensions workspace — no `pi install`):
 
 ```bash
-git clone https://github.com/yesitsfebreeze-pi/pi-claude.git extensions/pi-claude
-cd extensions/pi-claude && npm install && npm run build
+git clone https://github.com/yesitsfebreeze-pi/oilrig-claude.git extensions/oilrig-claude
+cd extensions/oilrig-claude && npm install && npm run build
 ```
 
 Restart Pi after installation.
@@ -55,7 +55,7 @@ The bridge also reads `claude-bridge.json` (`~/.pi/agent/claude-bridge.json`, an
 
 | Setting | What it does |
 | --- | --- |
-| Enable Pi Claude provider | Register `pi-claude/*` models. Reload required. |
+| Enable Pi Claude provider | Register `oilrig-claude/*` models. Reload required. |
 
 ### Base prompt
 
@@ -93,7 +93,7 @@ Pi 0.80.6 and newer expose native `max` thinking. Fable 5, Opus 5, and Sonnet 5 
 {"claude-opus-4-8":"max"}
 ```
 
-Keys may be bare model IDs (`claude-opus-4-8`), `pi-claude/<id>`, or `*` for all bridge models. Values are `low`, `medium`, `high`, `xhigh`, or `max`.
+Keys may be bare model IDs (`claude-opus-4-8`), `oilrig-claude/<id>`, or `*` for all bridge models. Values are `low`, `medium`, `high`, `xhigh`, or `max`.
 
 ### Connectors
 
@@ -115,7 +115,7 @@ Each of those lookups is still recorded in the session file as a `claude-bridge-
 That entry needs a pi session to be written into. A host that embeds the bridge **without** one — loading it through a bare resource loader, so `extensionApi` is undefined — gets no record at all, and nothing in the bridge can tell. Such a host can install its own destination:
 
 ```ts
-import { setConnectorCallAuditSink } from "pi-claude";
+import { setConnectorCallAuditSink } from "oilrig-claude";
 
 setConnectorCallAuditSink((record) => myOwnAuditTrail(record));  // pass undefined to clear
 ```
@@ -129,7 +129,7 @@ Extension-manager settings use flat package-scoped keys:
   "vstack": {
     "extensionManager": {
       "config": {
-        "pi-claude": {
+        "oilrig-claude": {
           "enableConnectors": true,
           "connectorWriteMode": "deny"
         }
@@ -174,22 +174,22 @@ Bridge settings come only from the authoritative `<PI_CODING_AGENT_DIR>/claude-b
 
 ### Fable 5 and Opus 5 caveat
 
-The bridge registers `pi-claude/claude-fable-5`, `pi-claude/claude-opus-5`, `pi-claude/claude-sonnet-5`, and `pi-claude/claude-opus-4-8` even when Pi's Anthropic model registry has not shipped those entries yet. Fable 5 and Opus 5 both run classifiers that can decline a turn, so for each of them the bridge asks Claude Code to use Opus 4.8 as the availability fallback and preserves Claude Code's content-safety fallback events so Pi labels rerouted turns as Opus 4.8. Content-safety fallback still depends on Claude Code's own Fable 5 support; use Claude Code 2.1.170 or newer, and set `ANTHROPIC_DEFAULT_FABLE_MODEL` / `ANTHROPIC_DEFAULT_OPUS_MODEL` yourself when routing provider-specific model IDs through Bedrock, Vertex, or Foundry.
+The bridge registers `oilrig-claude/claude-fable-5`, `oilrig-claude/claude-opus-5`, `oilrig-claude/claude-sonnet-5`, and `oilrig-claude/claude-opus-4-8` even when Pi's Anthropic model registry has not shipped those entries yet. Fable 5 and Opus 5 both run classifiers that can decline a turn, so for each of them the bridge asks Claude Code to use Opus 4.8 as the availability fallback and preserves Claude Code's content-safety fallback events so Pi labels rerouted turns as Opus 4.8. Content-safety fallback still depends on Claude Code's own Fable 5 support; use Claude Code 2.1.170 or newer, and set `ANTHROPIC_DEFAULT_FABLE_MODEL` / `ANTHROPIC_DEFAULT_OPUS_MODEL` yourself when routing provider-specific model IDs through Bedrock, Vertex, or Foundry.
 
 ## Connector inventory
 
-`/pi-claude:connectors` lists the Claude account's installed claude.ai connectors by asking the account, not the model, so the answer is complete by construction.
+`/oilrig-claude:connectors` lists the Claude account's installed claude.ai connectors by asking the account, not the model, so the answer is complete by construction.
 
 `listAccountConnectors()` is the programmatic form for host apps. Import it from the package's `./connector-inventory` entry point:
 
 ```ts
-import { listAccountConnectors, resolveClaudeOAuth } from "pi-claude/connector-inventory";
+import { listAccountConnectors, resolveClaudeOAuth } from "oilrig-claude/connector-inventory";
 ```
 
 The same functions are re-exported from the package root for consuming apps whose vendored `package.json` uses a closed exports map (`{".": "./bundle/index.js"}`), which blocks every subpath:
 
 ```ts
-import { listAccountConnectors } from "pi-claude";
+import { listAccountConnectors } from "oilrig-claude";
 ```
 
 It returns a discriminated result: on success `{ ok: true, complete: true, connectors }`, and on any transport or protocol failure `{ ok: false, reason }`. An account with no connectors is a successful empty list; a failure is never reported as an empty inventory. Credentials resolve from `CLAUDE_CONFIG_DIR` before `$HOME`, so a host running one sidecar per Claude account reads the right account.

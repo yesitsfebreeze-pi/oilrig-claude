@@ -25,7 +25,7 @@ import { hasClaudeCredentials } from "./auth-presence.js";
 import { PROVIDER_ID } from "./convert.js";
 
 export const NATIVE_PROVIDER_UNSUPPORTED_MESSAGE =
-	"Claude bridge 2.x requires pi >= 0.81 (native provider API). Upgrade the host pi, or pin pi-claude@1.x.";
+	"Claude bridge 2.x requires pi >= 0.81 (native provider API). Upgrade the host pi, or pin oilrig-claude@1.x.";
 
 /** pi-ai gained createProvider in 0.81 alongside the object-form
  *  registerProvider; its presence is the capability signal for both. */
@@ -64,7 +64,7 @@ export function buildNativeProvider(
 	// The legacy config path stamped provider/api/baseUrl onto each model during
 	// composition; createProvider passes models through verbatim, so stamp here.
 	// Stamps win over any provider field the source model carries — the models
-	// come from pi-ai's anthropic registry and must be re-homed under pi-claude.
+	// come from pi-ai's anthropic registry and must be re-homed under oilrig-claude.
 	const stamped = models.map((model) => ({ ...model, api: "claude-bridge", baseUrl: "claude-bridge", provider: PROVIDER_ID }));
 	// The Claude Code subprocess router IS the implementation for both stream
 	// entry points — there is no raw-API shape to dispatch to.

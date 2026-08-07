@@ -28,10 +28,10 @@ function withTempDirs(fn) {
 describe("loadConfig", () => {
 	it("ignores project settings until project trust is recorded", () => withTempDirs(({ user, project }) => {
 		writeFileSync(join(user, "settings.json"), JSON.stringify({
-			vstack: { extensionManager: { config: { "pi-claude": { fastMode: false } } } },
+			vstack: { extensionManager: { config: { "oilrig-claude": { fastMode: false } } } },
 		}));
 		writeFileSync(join(project, ".pi", "settings.json"), JSON.stringify({
-			vstack: { extensionManager: { config: { "pi-claude": { fastMode: true } } } },
+			vstack: { extensionManager: { config: { "oilrig-claude": { fastMode: true } } } },
 		}));
 
 		const config = loadConfig(project);
@@ -51,10 +51,10 @@ describe("loadConfig", () => {
 
 	it("lets trusted project settings override user settings", () => withTempDirs(({ user, project }) => {
 		writeFileSync(join(user, "settings.json"), JSON.stringify({
-			vstack: { extensionManager: { config: { "pi-claude": { fastMode: false } } } },
+			vstack: { extensionManager: { config: { "oilrig-claude": { fastMode: false } } } },
 		}));
 		writeFileSync(join(project, ".pi", "settings.json"), JSON.stringify({
-			vstack: { extensionManager: { config: { "pi-claude": { fastMode: true } } } },
+			vstack: { extensionManager: { config: { "oilrig-claude": { fastMode: true } } } },
 		}));
 		recordProjectTrust({ cwd: project, isProjectTrusted: () => true });
 
@@ -64,17 +64,17 @@ describe("loadConfig", () => {
 
 	it("maps extension-manager effort overrides into provider config", () => withTempDirs(({ user, project }) => {
 		writeFileSync(join(user, "settings.json"), JSON.stringify({
-			vstack: { extensionManager: { config: { "pi-claude": {
+			vstack: { extensionManager: { config: { "oilrig-claude": {
 				fastMode: false,
 				forceEffort: "high",
 				modelEffortOverrides: JSON.stringify({ "claude-opus-4-8": "xhigh", ignored: "bogus" }),
 			} } } },
 		}));
 		writeFileSync(join(project, ".pi", "settings.json"), JSON.stringify({
-			vstack: { extensionManager: { config: { "pi-claude": {
+			vstack: { extensionManager: { config: { "oilrig-claude": {
 				fastMode: true,
 				forceEffort: "max",
-				modelEffortOverrides: { "pi-claude/claude-opus-4-8": "max", "claude-haiku-4-5": "low" },
+				modelEffortOverrides: { "oilrig-claude/claude-opus-4-8": "max", "claude-haiku-4-5": "low" },
 			} } } },
 		}));
 		recordProjectTrust({ cwd: project, isProjectTrusted: () => true });
@@ -83,14 +83,14 @@ describe("loadConfig", () => {
 		assert.equal(config.provider?.fastMode, true);
 		assert.equal(config.provider?.forceEffort, "max");
 		assert.deepEqual(config.provider?.modelEffortOverrides, {
-			"pi-claude/claude-opus-4-8": "max",
+			"oilrig-claude/claude-opus-4-8": "max",
 			"claude-haiku-4-5": "low",
 		});
 	}));
 
 	it("ignores invalid effort override settings", () => withTempDirs(({ project }) => {
 		writeFileSync(join(project, ".pi", "settings.json"), JSON.stringify({
-			vstack: { extensionManager: { config: { "pi-claude": {
+			vstack: { extensionManager: { config: { "oilrig-claude": {
 				forceEffort: "ultracode",
 				modelEffortOverrides: "not json",
 			} } } },
@@ -109,10 +109,10 @@ describe("loadConfig", () => {
 
 	it("ignores project-scope enableConnectors/connectorWriteMode from manager settings", () => withTempDirs(({ user, project }) => {
 		writeFileSync(join(user, "settings.json"), JSON.stringify({
-			vstack: { extensionManager: { config: { "pi-claude": { fastMode: false } } } },
+			vstack: { extensionManager: { config: { "oilrig-claude": { fastMode: false } } } },
 		}));
 		writeFileSync(join(project, ".pi", "settings.json"), JSON.stringify({
-			vstack: { extensionManager: { config: { "pi-claude": {
+			vstack: { extensionManager: { config: { "oilrig-claude": {
 				fastMode: true,
 				enableConnectors: true,
 				connectorWriteMode: "allow",
@@ -142,7 +142,7 @@ describe("loadConfig", () => {
 
 	it("still honors user-scope connector keys (manager settings and legacy file)", () => withTempDirs(({ user, project }) => {
 		writeFileSync(join(user, "settings.json"), JSON.stringify({
-			vstack: { extensionManager: { config: { "pi-claude": {
+			vstack: { extensionManager: { config: { "oilrig-claude": {
 				enableConnectors: true,
 				connectorWriteMode: "allow",
 			} } } },
@@ -163,7 +163,7 @@ describe("loadConfig", () => {
 			provider: { forceEffort: "max", modelEffortOverrides: { "claude-opus-4-8": "max" } },
 		}));
 		writeFileSync(join(project, ".pi", "settings.json"), JSON.stringify({
-			vstack: { extensionManager: { config: { "pi-claude": {
+			vstack: { extensionManager: { config: { "oilrig-claude": {
 				forceEffort: "none",
 				modelEffortOverrides: "{}",
 			} } } },

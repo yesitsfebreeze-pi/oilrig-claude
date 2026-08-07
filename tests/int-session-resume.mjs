@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Context continuity test for pi-claude provider.
+// Context continuity test for oilrig-claude provider.
 // Verifies that switching away from the provider and back correctly
 // preserves conversation context (all messages are flattened into
 // each query, so "missed" messages are automatically included).
@@ -17,7 +17,7 @@ const OTHER_PROVIDER = requireEnv("CLAUDE_BRIDGE_TESTING_ALT_PROVIDER");
 const OTHER_MODEL = requireEnv("CLAUDE_BRIDGE_TESTING_ALT_MODEL");
 
 const TIMEOUT = 180_000;
-const BRIDGE_MODEL = "pi-claude/claude-haiku-4-5";
+const BRIDGE_MODEL = "oilrig-claude/claude-haiku-4-5";
 
 // Random words to avoid Claude memorizing test values across runs
 const WORD_A = `alpha${Math.random().toString(36).slice(2, 6)}`;

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Smoke tests for pi-claude provider.
+# Smoke tests for oilrig-claude provider.
 # Requires: pi CLI, Claude Code (for Agent SDK subprocess).
 # Requires: CLAUDE_BRIDGE_TESTING_ALT_MODEL (e.g. "MiniMax-M2.7-highspeed")
 
@@ -46,16 +46,16 @@ run() {
 
 run "provider: print mode responds" \
   pi --no-session -ne -e "$DIR" \
-  --model "pi-claude/claude-sonnet-5" \
+  --model "oilrig-claude/claude-sonnet-5" \
   -p "Reply with just the word 'yes'"
 
 run "provider: --provider flag works" \
   pi --no-session -ne -e "$DIR" \
-  --provider pi-claude \
+  --provider oilrig-claude \
   -p "Reply with just the word 'yes'"
 
 run "provider: model list includes provider" \
-  bash -c "pi --no-session -ne -e '$DIR' --list-models 2>&1 | grep pi-claude"
+  bash -c "pi --no-session -ne -e '$DIR' --list-models 2>&1 | grep oilrig-claude"
 
 # --- Summary ---
 

@@ -121,9 +121,9 @@ describe("thinking block filtering", () => {
 		assert.equal(result[0].content[0].type, "text");
 	});
 
-	it("canonical pi-claude thinking with signature is preserved", () => {
+	it("canonical oilrig-claude thinking with signature is preserved", () => {
 		const msgs = [
-			{ role: "assistant", provider: "pi-claude", content: [
+			{ role: "assistant", provider: "oilrig-claude", content: [
 				{ type: "thinking", thinking: "reasoning...", thinkingSignature: "sig123" },
 				{ type: "text", text: "answer" },
 			]},
@@ -148,7 +148,7 @@ describe("thinking block filtering", () => {
 
 	it("Anthropic provider thinking WITHOUT signature → dropped", () => {
 		const msgs = [
-			{ role: "assistant", provider: "pi-claude", content: [
+			{ role: "assistant", provider: "oilrig-claude", content: [
 				{ type: "thinking", thinking: "no sig" },
 				{ type: "text", text: "answer" },
 			]},

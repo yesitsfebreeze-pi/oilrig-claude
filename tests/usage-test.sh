@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# A/B usage comparison: pi-claude vs Claude Code direct.
+# A/B usage comparison: oilrig-claude vs Claude Code direct.
 # Runs the same conversation through both paths and compares
 # subscription usage delta and token metrics.
 #
@@ -134,11 +134,11 @@ echo "Turns: $NUM_TURNS"
 echo ""
 
 # ============================================================
-# Run A: pi-claude
+# Run A: oilrig-claude
 # ============================================================
 
 echo "=========================================="
-echo "  Run A: pi-claude"
+echo "  Run A: oilrig-claude"
 echo "=========================================="
 
 echo "Fetching usage before..."
@@ -153,7 +153,7 @@ LOGFILE_A="$LOGDIR/usage-test-bridge.ndjson"
 echo ""
 echo "Running bridge conversation..."
 timeout 600 pi --no-session -ne -e "$DIR" \
-  --model "pi-claude/$MODEL" \
+  --model "oilrig-claude/$MODEL" \
   --mode json \
   "${PROMPT_ARGS[@]}" \
   > "$LOGFILE_A" 2>"$LOGFILE_A.err"

@@ -5,7 +5,7 @@ import { ctx, resetStack } from "../src/query-state.ts";
 
 const model = {
 	api: "claude-bridge",
-	provider: "pi-claude",
+	provider: "oilrig-claude",
 	id: "claude-haiku-4-5",
 	cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 };

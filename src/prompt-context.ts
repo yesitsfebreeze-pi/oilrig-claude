@@ -135,7 +135,7 @@ export function buildPromptContextAppend(systemPrompt: string | undefined, cwd: 
 			"forwarded_pi_context",
 			{},
 			[
-				"The following content was explicitly enabled in pi-claude settings and comes from Pi prompt files or before_agent_start prompt hooks.",
+				"The following content was explicitly enabled in oilrig-claude settings and comes from Pi prompt files or before_agent_start prompt hooks.",
 				...parts,
 			].join("\n\n"),
 			false,

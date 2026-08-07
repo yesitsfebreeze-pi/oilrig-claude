@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Multi-turn integration tests for pi-claude provider.
+# Multi-turn integration tests for oilrig-claude provider.
 # Verifies tool use and multi-turn context via --mode json output.
 # Requires: pi CLI, Claude Code (for Agent SDK subprocess), jq.
 
@@ -59,7 +59,7 @@ run_json "multi-turn: tool use, context, history" \
    ([.[] | select(.type == "message_update") | .assistantMessageEvent | select(.type == "text_end") | .content] | join(" ") | test("'"$EXPECTED_VERSION"'")) and
    ([.[] | select(.type == "message_update") | .assistantMessageEvent | select(.type == "text_end") | .content] | join(" ") | test("banana"))' \
   pi --no-session -ne -e "$DIR" \
-  --model "pi-claude/claude-haiku-4-5" \
+  --model "oilrig-claude/claude-haiku-4-5" \
   --mode json \
   -p "The secret word is 'banana'. Read package.json and tell me the version. Be brief." \
      "Now read README.md and tell me the first heading. Be brief." \
@@ -69,10 +69,10 @@ run_json "multi-turn: tool use, context, history" \
 # when processAssistantMessage didn't end the stream on tool_use.
 run_json "single-turn: multiple sequential tool calls" \
   '([.[] | select(.type == "message_update") | .assistantMessageEvent | select(.type == "toolcall_end")] | length) >= 2 and
-   ([.[] | select(.type == "message_update") | .assistantMessageEvent | select(.type == "text_end") | .content] | join(" ") | test("pi-claude")) and
+   ([.[] | select(.type == "message_update") | .assistantMessageEvent | select(.type == "text_end") | .content] | join(" ") | test("oilrig-claude")) and
    ([.[] | select(.type == "message_update") | .assistantMessageEvent | select(.type == "text_end")] | length) > 0' \
   pi --no-session -ne -e "$DIR" \
-  --model "pi-claude/claude-haiku-4-5" \
+  --model "oilrig-claude/claude-haiku-4-5" \
   --mode json \
   -p "Read both package.json and README.md, then tell me the package name and the full first heading of the README."
 
@@ -83,10 +83,10 @@ run_json "single-turn: 3+ parallel tool calls" \
   '([.[] | select(.type == "message_update") | .assistantMessageEvent | select(.type == "toolcall_end")] | length) >= 3 and
    ([ .[] | select(.type == "message_update") | .assistantMessageEvent | select(.type == "text_end") ] | length) > 0 and
    ([ .[] | select(.type == "message_update") | .assistantMessageEvent | select(.type == "text_end") | .content | select(. != null and . != "") ] | length) > 0 and
-   ([.[] | select(.type == "message_update") | .assistantMessageEvent | select(.type == "text_end") | .content] | join(" ") | test("pi-claude")) and
+   ([.[] | select(.type == "message_update") | .assistantMessageEvent | select(.type == "text_end") | .content] | join(" ") | test("oilrig-claude")) and
    ([.[] | select(.type == "message_update") | .assistantMessageEvent | select(.type == "text_end") | .content] | join(" ") | test("ES2022"))' \
   pi --no-session -ne -e "$DIR" \
-  --model "pi-claude/claude-haiku-4-5" \
+  --model "oilrig-claude/claude-haiku-4-5" \
   --mode json \
   -p "Read package.json, README.md, and tsconfig.json at the same time, then tell me the package name, the first heading in the README, and the TypeScript target."
 
@@ -98,20 +98,20 @@ run_json "regression: final text survives multi-round tool calls" \
    ([ .[] | select(.type == "message_update") | .assistantMessageEvent | select(.type == "text_end") ] | length) > 0 and
    ([ .[] | select(.type == "message_update") | .assistantMessageEvent | select(.type == "text_end") | .content | select(. != null and . != "") ] | length) > 0' \
   pi --no-session -ne -e "$DIR" \
-  --model "pi-claude/claude-haiku-4-5" \
+  --model "oilrig-claude/claude-haiku-4-5" \
   --mode json \
   -p "Read package.json and README.md, then summarize what you found in one sentence."
 
 # Regression: extractAllToolResults traversed past assistant messages, feeding
 # stale tool results from turn 1 into turn 2.  Turn 1 reads package.json (has
-# "pi-claude"), turn 2 reads LICENSE (has "MIT License").  If stale
+# "oilrig-claude"), turn 2 reads LICENSE (has "MIT License").  If stale
 # results leak, turn 2 would see package.json content instead of LICENSE content.
 run_json "regression: turn 2 tool results not stale from turn 1" \
   '([.[] | select(.type == "agent_end")] | length) >= 2 and
    ([.[] | select(.type == "message_update") | .assistantMessageEvent | select(.type == "toolcall_end")] | length) >= 2 and
    ([.[] | select(.type == "message_update") | .assistantMessageEvent | select(.type == "text_end") | .content] | join(" ") | test("[Mm][Ii][Tt]"))' \
   pi --no-session -ne -e "$DIR" \
-  --model "pi-claude/claude-haiku-4-5" \
+  --model "oilrig-claude/claude-haiku-4-5" \
   --mode json \
   -p "Read package.json and tell me the package name. Be brief, just the name." \
      "Now read LICENSE and tell me what type of license it is. Be brief, just the license type."

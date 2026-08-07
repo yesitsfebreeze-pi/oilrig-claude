@@ -143,7 +143,7 @@ describe("resolveExternalConfigValue", () => {
 
 	it("reports only non-manager channels, since manager config outranks them", () => withTempDirs(({ user, project }) => {
 		writeFileSync(join(user, "settings.json"), JSON.stringify({
-			vstack: { extensionManager: { config: { "pi-claude": { enabled: true, fastMode: true } } } },
+			vstack: { extensionManager: { config: { "oilrig-claude": { enabled: true, fastMode: true } } } },
 		}));
 
 		assert.equal(resolveExternalConfigValue("enabled", project).explicit, false);

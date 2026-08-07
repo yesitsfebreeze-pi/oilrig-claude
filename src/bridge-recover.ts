@@ -105,7 +105,7 @@ export default function (pi: ExtensionAPI) {
 		// check reads ~/.claude/.last-login, but the SDK spawn authenticates against
 		// process.env.CLAUDE_CONFIG_DIR — unset, it falls back to the top-level
 		// ~/.claude account, ignoring the selected profile. Set it here so both
-		// agree. An explicit env value wins. (Ported from the old pi-launch.sh
+		// agree. An explicit env value wins. (Ported from the old oilrig-launch.sh
 		// wrapper so the dotfiles' `pi` no longer depends on a shell launcher.)
 		if (!process.env.CLAUDE_CONFIG_DIR) {
 			try {
